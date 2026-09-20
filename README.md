@@ -15,7 +15,7 @@ Try these questions in the chat:
 
 For a filter refinement, ask for the top five products and then send `Chỉ xem ở Hà Nội.` Remove the `City = Hà Nội` chip to clear that filter. Open **View SQL** to inspect or copy the example query; the displayed SQL is mock content and is not executed. Recent analyses in the sidebar are also sample conversations and reset when the page is reloaded.
 
-The API badge checks FastAPI `GET /health`. Superset is labeled **Demo** until a real integration is connected. Save chart, dashboard, and Superset actions are intentionally disabled in this frontend demo. The database `ai_bi` remains empty, and the mock chart values are defined in the frontend.
+The API badge checks FastAPI `GET /health`. Superset is labeled **Demo** until a real integration is connected. Save chart, dashboard, and Superset actions are intentionally disabled in this frontend demo. The charts still use mock frontend values; NYC Yellow Taxi source data is loaded separately into the PostgreSQL `raw` schema for exploration.
 
 ## Architecture
 
@@ -29,7 +29,7 @@ Browser
         └── Redis (cache)
 ```
 
-There is no LLM or NL2SQL integration, no business schema or seed data, and no Superset dataset or dashboard yet. The `ai_bi` database is intentionally empty so a real dataset can be imported later.
+There is no LLM or NL2SQL integration and no Superset dataset or dashboard yet. The `ai_bi` database contains raw NYC Yellow Taxi trip and zone lookup tables for data exploration.
 
 ## Requirements
 
@@ -100,3 +100,64 @@ docker compose down
 `docker compose down` removes containers and the Compose network but preserves named volumes and their database data. `docker compose down -v` also deletes persistent volumes, including PostgreSQL databases, Redis data, Superset home data, and frontend dependency caches.
 
 PostgreSQL's initialization SQL runs only when `postgres_data` is empty. It creates the `superset` database alongside the initial `ai_bi` database. The `ai_bi` database contains no business tables or sample data.
+
+## NYC Yellow Taxi Data Ingestion
+
+The one-off `data-loader` Compose service reads the source files from `data/` and writes raw data to the `ai_bi` PostgreSQL database. It uses the existing `DATABASE_URL`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` settings from `.env`; inside Compose, PostgreSQL is reached as `postgres:5432`. Existing host port mappings are unchanged.
+
+Expected source files:
+
+```text
+data/yellow_tripdata_2026-05.parquet
+data/yellow_tripdata_2026-06.parquet
+data/yellow_tripdata_2026-07.parquet
+data/taxi_zone_lookup.csv
+```
+
+Inspect source file sizes, row counts, actual schemas, schema drift, first five rows, and the supplied trip dictionary:
+
+```bash
+docker compose run --rm data-loader /app/scripts/inspect_nyc_taxi_data.py
+```
+
+Import all available Yellow Taxi Parquet files and the zone lookup. Parquet rows are streamed in batches; each source is imported in its own transaction, and the loader validates its row count before recording success:
+
+```bash
+docker compose run --rm data-loader
+```
+
+Successful, unchanged sources are skipped on later runs. Reload only one source file (its existing rows are replaced transactionally):
+
+```bash
+docker compose run --rm data-loader /app/scripts/import_nyc_taxi.py --reload yellow_tripdata_2026-05.parquet
+```
+
+Use `--reload` without a filename to reload every available source. After a successful import, profile the database and write `data/nyc_taxi_profile.md`:
+
+```bash
+docker compose run --rm data-loader /app/scripts/profile_nyc_taxi.py
+```
+
+The raw tables are `raw.yellow_taxi_trips`, `raw.taxi_zone_lookup`, and `raw.ingestion_log`. The trip table keeps source fields (normalized to snake_case with source-name mappings in the report) and adds `source_file`, `source_year`, `source_month`, and `loaded_at`. No synthetic trip primary key or business transformation is applied.
+
+Example PostgreSQL checks from a SQL client:
+
+```sql
+SELECT table_schema, table_name
+FROM information_schema.tables
+WHERE table_schema = 'raw'
+ORDER BY table_name;
+
+SELECT COUNT(*) FROM raw.yellow_taxi_trips;
+
+SELECT source_file, COUNT(*) AS rows
+FROM raw.yellow_taxi_trips
+GROUP BY source_file
+ORDER BY source_file;
+
+SELECT * FROM raw.yellow_taxi_trips LIMIT 10;
+SELECT * FROM raw.taxi_zone_lookup LIMIT 10;
+SELECT * FROM raw.ingestion_log ORDER BY source_file;
+```
+
+The generated profile includes the discovered PostgreSQL schema, per-column null and numeric summaries, date ranges and month anomalies, categorical frequencies, zone lookup statistics, pickup/dropoff location ID compatibility, quality-check counts, and sample rows. Profiling reports anomalies without deleting or cleaning records.
