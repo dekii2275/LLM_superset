@@ -2,6 +2,21 @@
 
 Docker Compose skeleton for an AI BI Assistant with a Next.js frontend, FastAPI backend, PostgreSQL, Apache Superset, and Redis.
 
+## Frontend Demo
+
+The frontend is a dark analytics workspace with a mock chat and visualization flow. It runs without an LLM or a real analytics query engine, so you can explore the product UI while the backend integrations are developed.
+
+Try these questions in the chat:
+
+- `Tổng doanh thu năm 2026?` — a big number card.
+- `Xu hướng doanh thu theo tháng?` — a line chart.
+- `Top 5 sản phẩm doanh thu cao nhất?` — a bar chart.
+- `Doanh thu theo thành phố?` — a city comparison chart.
+
+For a filter refinement, ask for the top five products and then send `Chỉ xem ở Hà Nội.` Remove the `City = Hà Nội` chip to clear that filter. Open **View SQL** to inspect or copy the example query; the displayed SQL is mock content and is not executed. Recent analyses in the sidebar are also sample conversations and reset when the page is reloaded.
+
+The API badge checks FastAPI `GET /health`. Superset is labeled **Demo** until a real integration is connected. Save chart, dashboard, and Superset actions are intentionally disabled in this frontend demo. The database `ai_bi` remains empty, and the mock chart values are defined in the frontend.
+
 ## Architecture
 
 ```text
@@ -10,11 +25,11 @@ Browser
   │     └── FastAPI backend
   │             └── PostgreSQL (ai_bi)
   └── Apache Superset
-        ├── PostgreSQL (superset metadata)
+        ├── PostgreSQL (Superset metadata)
         └── Redis (cache)
 ```
 
-This phase creates infrastructure only. There is no LLM or NL2SQL integration, and no business schema, seed data, dataset, chart, or dashboard. Database `ai_bi` is intentionally empty so a real dataset can be imported later.
+There is no LLM or NL2SQL integration, no business schema or seed data, and no Superset dataset or dashboard yet. The `ai_bi` database is intentionally empty so a real dataset can be imported later.
 
 ## Requirements
 
@@ -36,7 +51,6 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 Then build and start the services:
 
 ```bash
-cp .env.example .env
 docker compose build
 docker compose up -d
 docker compose ps
@@ -62,7 +76,7 @@ Database clients inside Compose use service DNS and container ports. For example
 - `GET /health` returns `{"status":"ok"}`.
 - `GET /health/db` runs `SELECT 1` and returns the PostgreSQL connection status.
 - `GET /health/superset` checks Superset's health endpoint.
-- The frontend status cards periodically check FastAPI, PostgreSQL, and Superset.
+- The frontend periodically checks only the FastAPI `GET /health` endpoint; its Superset badge is a demo status.
 - PostgreSQL uses `pg_isready`; Redis uses `redis-cli ping`.
 
 Check the API from a terminal:
@@ -76,6 +90,7 @@ curl http://localhost:48123/health/db
 
 ```bash
 docker compose ps
+docker compose logs -f frontend
 docker compose logs -f backend
 docker compose logs -f superset
 docker compose logs -f postgres
