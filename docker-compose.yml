@@ -65,7 +65,7 @@ services:
         postgresql+psycopg://${POSTGRES_USER:?Set POSTGRES_USER in .env.local or .env.prod}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.local or .env.prod}@postgres:5432/${APP_DB_NAME:-ai_bi}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:43117}
       FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:43117,http://127.0.0.1:43117}
-      SUPERSET_URL: http://superset:8088
+      SUPERSET_URL: http://superset:8088${SUPERSET_APP_ROOT:-}
       SUPERSET_PUBLIC_URL: ${SUPERSET_PUBLIC_URL:-http://localhost:58088}
       SUPERSET_ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME:?Set SUPERSET_ADMIN_USERNAME in .env.local or .env.prod}
       SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:?Set SUPERSET_ADMIN_PASSWORD in .env.local or .env.prod}
