@@ -6,7 +6,8 @@ USER root
 # the configured cache backend.
 RUN uv pip install --python /app/.venv/bin/python \
     "psycopg2-binary>=2.9.9,<3" \
-    "redis==5.2.1"
+    "redis==5.2.1" \
+    "fastmcp>=3.1.0,<4.0.0"
 
 COPY --chown=superset:superset superset_config.py /app/superset_config.py
 COPY init-superset.sh /app/init-superset.sh

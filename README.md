@@ -1,163 +1,184 @@
 # AI BI Assistant
 
-Docker Compose skeleton for an AI BI Assistant with a Next.js frontend, FastAPI backend, PostgreSQL, Apache Superset, and Redis.
+An analytics workspace for the NYC Yellow Taxi dataset. The app combines a
+Next.js chat interface, FastAPI, PostgreSQL, Apache Superset, Redis, and
+Gemini-assisted analysis.
 
-## Frontend Demo
+## What it does
 
-The frontend is a dark analytics workspace with a mock chat and visualization flow. It runs without an LLM or a real analytics query engine, so you can explore the product UI while the backend integrations are developed.
+- Ask questions about the connected NYC Yellow Taxi data.
+- Preview query results and charts in the chat.
+- Create charts and dashboards in Superset after an explicit confirmation.
+- Embed the live Superset dashboard in the application.
 
-Try these questions in the chat:
-
-- `Tổng doanh thu năm 2026?` — a big number card.
-- `Xu hướng doanh thu theo tháng?` — a line chart.
-- `Top 5 sản phẩm doanh thu cao nhất?` — a bar chart.
-- `Doanh thu theo thành phố?` — a city comparison chart.
-
-For a filter refinement, ask for the top five products and then send `Chỉ xem ở Hà Nội.` Remove the `City = Hà Nội` chip to clear that filter. Open **View SQL** to inspect or copy the example query; the displayed SQL is mock content and is not executed. Recent analyses in the sidebar are also sample conversations and reset when the page is reloaded.
-
-The API badge checks FastAPI `GET /health`. Superset is labeled **Demo** until a real integration is connected. Save chart, dashboard, and Superset actions are intentionally disabled in this frontend demo. The charts still use mock frontend values; NYC Yellow Taxi source data is loaded separately into the PostgreSQL `raw` schema for exploration.
-
-## Architecture
-
-```text
-Browser
-  ├── Next.js frontend
-  │     └── FastAPI backend
-  │             └── PostgreSQL (ai_bi)
-  └── Apache Superset
-        ├── PostgreSQL (Superset metadata)
-        └── Redis (cache)
-```
-
-There is no LLM or NL2SQL integration and no Superset dataset or dashboard yet. The `ai_bi` database contains raw NYC Yellow Taxi trip and zone lookup tables for data exploration.
+The application is designed around the `ai_bi` PostgreSQL database and the
+`raw.yellow_taxi_trips` table. Superset metadata is stored separately in the
+`superset` database.
 
 ## Requirements
 
-- Docker Desktop or Docker Engine
-- Docker Compose v2 (`docker compose`)
+- Git
+- Docker Engine or Docker Desktop with Docker Compose v2
+- Optional: Python 3 for the Superset setup script
 
-## Setup
+## Repository and data policy
 
-Copy `.env.example` to `.env`, then replace the PostgreSQL password, Superset admin password, and Superset secret key with unique values. Use the same PostgreSQL password in `POSTGRES_PASSWORD` and `DATABASE_URL`.
+Source code, configuration templates, scripts, and documentation are kept in
+Git. Large or environment-specific data is deliberately ignored:
 
-In PowerShell, use `Copy-Item .env.example .env` for the copy step.
+- `data/*.parquet` — raw NYC Taxi source files
+- `data/exports/*.dump`, `.backup`, `.sql`, `.tar`, `.zip` — database exports
+- `.env` — credentials and deployment settings
 
-Generate a Superset secret key with:
+Keep those files in private object storage, a secure backup system, or a
+separate release bundle. See [data/exports/README.md](data/exports/README.md)
+for the current PostgreSQL archive format.
 
-```bash
-python -c "import secrets; print(secrets.token_urlsafe(48))"
-```
+## Quick start
 
-Then build and start the services:
+1. Clone the repository and create a local environment file.
 
-```bash
-docker compose build
-docker compose up -d
-docker compose ps
-```
+   ```powershell
+   git clone <YOUR_REPOSITORY_URL>
+   Set-Location LLM_superset
+   Copy-Item .env.example .env
+   ```
 
-The Superset administrator is created from `SUPERSET_ADMIN_USERNAME`, `SUPERSET_ADMIN_PASSWORD`, and `SUPERSET_ADMIN_EMAIL` in `.env`. The initialization service skips creating the account if that username already exists. Changing the password in `.env` later does not reset the existing account password.
+2. Edit `.env`. At minimum, replace these placeholder values with unique
+   secrets:
 
-## Service URLs
+   - `POSTGRES_PASSWORD`
+   - `SUPERSET_ADMIN_PASSWORD`
+   - `SUPERSET_SECRET_KEY`
+   - `SUPERSET_GUEST_TOKEN_JWT_SECRET`
+   - `SUPERSET_ANALYTICS_DB_PASSWORD`
+
+   Set `GEMINI_API_KEY` to enable the AI chat. The stack still starts without
+   it, but `/api/v1/ai/chat` is unavailable.
+
+3. Start PostgreSQL, then load data by one of the methods below.
+
+   ```powershell
+   docker compose up -d postgres
+   ```
+
+4. Start the full stack.
+
+   ```powershell
+   docker compose up -d --build
+   docker compose ps
+   ```
+
+5. Initialize the Superset dataset and demo dashboard after Superset is
+   healthy.
+
+   ```powershell
+   python superset/scripts/setup_nyc_taxi_demo.py
+   ```
+
+Local URLs:
 
 | Service | URL |
 | --- | --- |
-| Frontend | <http://localhost:43117> |
-| FastAPI | <http://localhost:48123> |
-| FastAPI Swagger | <http://localhost:48123/docs> |
-| Superset | <http://localhost:58088> |
-| PostgreSQL | `localhost:55439` |
-| Redis | `localhost:56379` |
+| Application | http://localhost:43117 |
+| API docs | http://localhost:48123/docs |
+| Superset | http://localhost:58088 |
 
-Database clients inside Compose use service DNS and container ports. For example, FastAPI uses `postgres:5432`; Superset uses `postgres:5432` for metadata and `redis:6379` for cache. The host port mappings are for access from the host machine.
+## Load analytics data
 
-## Health checks
+Choose one method. Do this while only PostgreSQL is running for a clean first
+deployment.
 
-- `GET /health` returns `{"status":"ok"}`.
-- `GET /health/db` runs `SELECT 1` and returns the PostgreSQL connection status.
-- `GET /health/superset` checks Superset's health endpoint.
-- The frontend periodically checks only the FastAPI `GET /health` endpoint; its Superset badge is a demo status.
-- PostgreSQL uses `pg_isready`; Redis uses `redis-cli ping`.
+### Option A — restore a PostgreSQL archive (recommended)
 
-Check the API from a terminal:
+Copy the private archive, such as `ai_bi_raw_20260924.dump`, into
+`data/exports/`. It is a PostgreSQL custom archive and is already compressed.
+Do not unzip it.
 
-```bash
-curl http://localhost:48123/health
-curl http://localhost:48123/health/db
+```powershell
+docker compose cp data/exports/ai_bi_raw_20260924.dump postgres:/tmp/ai_bi_raw.dump
+docker compose exec -T postgres pg_restore -U ai_bi_user -d ai_bi --no-owner --no-privileges --clean --if-exists /tmp/ai_bi_raw.dump
 ```
 
-## Useful commands
+`--clean --if-exists` replaces objects in the `raw` schema; omit those flags
+when restoring into an empty database. Replace `ai_bi_user` and `ai_bi` only
+if you changed `POSTGRES_USER` or `APP_DB_NAME` in `.env`. Verify the import:
 
-```bash
+```powershell
+docker compose exec -T postgres psql -U ai_bi_user -d ai_bi -c "SELECT COUNT(*) FROM raw.yellow_taxi_trips;"
+```
+
+### Option B — import source files
+
+Obtain these private source files and place them under `data/`:
+
+```text
+yellow_tripdata_2026-05.parquet
+yellow_tripdata_2026-06.parquet
+yellow_tripdata_2026-07.parquet
+taxi_zone_lookup.csv
+```
+
+Then run the loader:
+
+```powershell
+docker compose --profile tools run --rm data-loader
+```
+
+Set `DEMO_MAX_ROWS_PER_SOURCE=0` in `.env` only if a full source import is
+intended. The default limits each input file to 10,000 rows for the demo.
+
+## Operations
+
+```powershell
+# Service status and logs
 docker compose ps
-docker compose logs -f frontend
 docker compose logs -f backend
+docker compose logs -f frontend
 docker compose logs -f superset
-docker compose logs -f postgres
+
+# Health checks
+Invoke-WebRequest http://localhost:48123/health
+Invoke-WebRequest http://localhost:48123/health/db
+
+# Stop services but preserve database volumes
 docker compose down
 ```
 
-`docker compose down` removes containers and the Compose network but preserves named volumes and their database data. `docker compose down -v` also deletes persistent volumes, including PostgreSQL databases, Redis data, Superset home data, and frontend dependency caches.
+`docker compose down -v` deletes PostgreSQL, Redis, Superset, and frontend
+volumes. Use it only when you intend to remove all local persisted state.
 
-PostgreSQL's initialization SQL runs only when `postgres_data` is empty. It creates the `superset` database alongside the initial `ai_bi` database. The `ai_bi` database contains no business tables or sample data.
+## Server deployment
 
-## NYC Yellow Taxi Data Ingestion
+The base Compose file deliberately binds all service ports to `127.0.0.1`.
+For a server, use a TLS reverse proxy such as Nginx or Caddy and keep PostgreSQL,
+Redis, and the Superset MCP port private. Set the public URLs in `.env` before
+starting containers:
 
-The one-off `data-loader` Compose service reads the source files from `data/` and writes raw data to the `ai_bi` PostgreSQL database. It uses the existing `DATABASE_URL`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` settings from `.env`; inside Compose, PostgreSQL is reached as `postgres:5432`. Existing host port mappings are unchanged.
-
-Expected source files:
-
-```text
-data/yellow_tripdata_2026-05.parquet
-data/yellow_tripdata_2026-06.parquet
-data/yellow_tripdata_2026-07.parquet
-data/taxi_zone_lookup.csv
+```dotenv
+FRONTEND_URL=https://bi.example.com
+FRONTEND_ORIGINS=https://bi.example.com
+NEXT_PUBLIC_API_URL=https://bi.example.com
+NEXT_PUBLIC_SUPERSET_URL=https://superset.example.com
+SUPERSET_PUBLIC_URL=https://superset.example.com
 ```
 
-Inspect source file sizes, row counts, actual schemas, schema drift, first five rows, and the supplied trip dictionary:
+Route `bi.example.com` to the local frontend port `43117` and its `/api/`
+path to local backend port `48123`. Route `superset.example.com` to local port
+`58088`. Full deployment order, proxy requirements, data restoration, and
+security checks are in [docs/deployment.md](docs/deployment.md).
 
-```bash
-docker compose run --rm data-loader /app/scripts/inspect_nyc_taxi_data.py
-```
+## Security notes
 
-Import all available Yellow Taxi Parquet files and the zone lookup. Parquet rows are streamed in batches; each source is imported in its own transaction, and the loader validates its row count before recording success:
+- Never commit `.env`, database dumps, raw Parquet files, or exported tokens.
+- Set distinct, strong Superset and PostgreSQL secrets for every environment.
+- The app has no end-user authentication yet. Do not expose it publicly until
+  authentication, authorization, and row-level security are configured.
+- Do not expose the MCP port (`55008`) outside localhost.
 
-```bash
-docker compose run --rm data-loader
-```
+## Further documentation
 
-Successful, unchanged sources are skipped on later runs. Reload only one source file (its existing rows are replaced transactionally):
-
-```bash
-docker compose run --rm data-loader /app/scripts/import_nyc_taxi.py --reload yellow_tripdata_2026-05.parquet
-```
-
-Use `--reload` without a filename to reload every available source. After a successful import, profile the database and write `data/nyc_taxi_profile.md`:
-
-```bash
-docker compose run --rm data-loader /app/scripts/profile_nyc_taxi.py
-```
-
-The raw tables are `raw.yellow_taxi_trips`, `raw.taxi_zone_lookup`, and `raw.ingestion_log`. The trip table keeps source fields (normalized to snake_case with source-name mappings in the report) and adds `source_file`, `source_year`, `source_month`, and `loaded_at`. No synthetic trip primary key or business transformation is applied.
-
-Example PostgreSQL checks from a SQL client:
-
-```sql
-SELECT table_schema, table_name
-FROM information_schema.tables
-WHERE table_schema = 'raw'
-ORDER BY table_name;
-
-SELECT COUNT(*) FROM raw.yellow_taxi_trips;
-
-SELECT source_file, COUNT(*) AS rows
-FROM raw.yellow_taxi_trips
-GROUP BY source_file
-ORDER BY source_file;
-
-SELECT * FROM raw.yellow_taxi_trips LIMIT 10;
-SELECT * FROM raw.taxi_zone_lookup LIMIT 10;
-SELECT * FROM raw.ingestion_log ORDER BY source_file;
-```
-
-The generated profile includes the discovered PostgreSQL schema, per-column null and numeric summaries, date ranges and month anomalies, categorical frequencies, zone lookup statistics, pickup/dropoff location ID compatibility, quality-check counts, and sample rows. Profiling reports anomalies without deleting or cleaning records.
+- [Deployment guide](docs/deployment.md)
+- [Data export and restore guide](data/exports/README.md)
+- [Superset dashboard guide](docs/superset-nyc-taxi-dashboard.md)
+- [Gemini and Superset MCP guide](docs/superset-mcp-gemini.md)

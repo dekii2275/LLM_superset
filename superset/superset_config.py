@@ -14,6 +14,42 @@ if len(secret_key) < 32 or secret_key in placeholder_secrets:
 
 SECRET_KEY = secret_key
 
+# Enable the official embedded-dashboard flow.  The separate guest-token key
+# should be supplied in production; the fallback keeps existing local installs
+# working until that value is added to .env.
+FEATURE_FLAGS = {"EMBEDDED_SUPERSET": True}
+GUEST_TOKEN_JWT_SECRET = os.environ.get("SUPERSET_GUEST_TOKEN_JWT_SECRET", secret_key)
+GUEST_TOKEN_JWT_EXP_SECONDS = 300
+# Gamma is the read-only built-in role appropriate for this local dashboard
+# demo. Replace it with a least-privilege EmbeddedViewer role in production.
+GUEST_ROLE_NAME = "Gamma"
+
+# Local-development MCP only. Do not expose this listener publicly or keep
+# authentication disabled in production; use a JWT/OAuth MCP configuration.
+MCP_AUTH_ENABLED = False
+MCP_DEV_USERNAME = os.getenv("MCP_DEV_USERNAME", "admin")
+MCP_SERVICE_HOST = "0.0.0.0"
+MCP_SERVICE_PORT = 5008
+# Superset defaults to SAMEORIGIN, which prevents the official embedded SDK
+# from rendering a dashboard in this frontend on a different local port.
+# Keep Superset's standard CSP and security headers, but allow the local
+# Next.js frontend to host its embedded dashboard. Flask-Talisman would
+# otherwise add X-Frame-Options: SAMEORIGIN; disabling only that legacy header
+# lets the explicit CSP `frame-ancestors` allow-list control embedding.
+from superset.config import TALISMAN_CONFIG as DEFAULT_TALISMAN_CONFIG
+
+TALISMAN_CONFIG = {
+    **DEFAULT_TALISMAN_CONFIG,
+    "frame_options": None,
+    "content_security_policy": {
+        **DEFAULT_TALISMAN_CONFIG["content_security_policy"],
+        "frame-ancestors": [
+            "http://localhost:43117",
+            "http://127.0.0.1:43117",
+        ],
+    },
+}
+
 SQLALCHEMY_DATABASE_URI = URL.create(
     "postgresql+psycopg2",
     username=os.environ["POSTGRES_USER"],

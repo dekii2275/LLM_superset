@@ -1,0 +1,12 @@
+# Keep text files consistent across Windows development machines and Linux hosts.
+* text=auto eol=lf
+
+# Preserve binary formats exactly.
+*.parquet binary
+*.dump binary
+*.backup binary
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary

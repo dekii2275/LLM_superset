@@ -407,12 +407,6 @@ a {
   padding: 8px 9px;
 }
 
-.mock-source-label {
-  margin-left: auto;
-  color: #657386;
-  font-size: 9px;
-}
-
 .sidebar-profile {
   gap: 9px;
   margin-top: 15px;
@@ -510,8 +504,6 @@ a {
   font-size: 9px;
 }
 
-.mock-mode-badge,
-.mock-data-label,
 .chart-type-label {
   display: inline-flex;
   align-items: center;
@@ -521,19 +513,6 @@ a {
   font-weight: 700;
   letter-spacing: 0.11em;
   white-space: nowrap;
-}
-
-.mock-mode-badge {
-  border: 1px solid rgba(158, 177, 202, 0.13);
-  border-radius: 5px;
-  padding: 5px 7px;
-}
-
-.mock-mode-badge .status-dot,
-.mock-data-label .status-dot {
-  width: 5px;
-  height: 5px;
-  flex-basis: 5px;
 }
 
 .chat-scroll-region {
@@ -761,6 +740,147 @@ a {
   color: #dce3f2;
 }
 
+.action-plan-card {
+  display: grid;
+  width: 100%;
+  gap: 7px;
+  margin-top: 12px;
+  border: 1px solid rgba(166, 180, 255, 0.24);
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(31, 43, 70, 0.7), rgba(15, 24, 36, 0.85));
+  padding: 13px;
+}
+
+.action-plan-kicker {
+  color: #9eacff;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.action-plan-card strong {
+  color: #dce4f3;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.action-plan-card p {
+  margin: 0;
+  color: #a9b7c8;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.action-plan-target,
+.action-plan-detail,
+.action-plan-status {
+  color: #9eacbd;
+  font-size: 9px;
+}
+
+.action-confirmation {
+  display: grid;
+  width: 100%;
+  gap: 7px;
+  margin-top: 12px;
+  border: 1px solid rgba(132, 217, 194, 0.23);
+  border-radius: 10px;
+  background: rgba(132, 217, 194, 0.055);
+  padding: 13px;
+}
+
+.action-confirmation strong {
+  color: #d6e9e3;
+  font-size: 11px;
+}
+
+.action-confirmation > span,
+.action-cancelled {
+  color: #92a5aa;
+  font-size: 10px;
+}
+
+.dashboard-plan-list {
+  display: grid;
+  gap: 6px;
+  margin: 3px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dashboard-plan-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #b7c8cf;
+  font-size: 10px;
+}
+
+.dashboard-plan-list li::before {
+  color: #8ccbb5;
+  content: "✓";
+}
+
+.dashboard-plan-list b {
+  flex: 1;
+  font-weight: 550;
+}
+
+.dashboard-plan-list small {
+  color: #80959b;
+  font-size: 9px;
+  text-transform: capitalize;
+}
+
+.action-confirmation p {
+  margin: 0;
+  color: var(--red);
+  font-size: 10px;
+}
+
+.action-confirmation-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 3px;
+}
+
+.action-confirmation-buttons button,
+.action-confirmation a {
+  min-height: 28px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: transparent;
+  color: #aebdcb;
+  cursor: pointer;
+  font-size: 9px;
+  padding: 0 9px;
+  text-decoration: none;
+}
+
+.action-confirmation-buttons .create-chart-button,
+.action-confirmation a {
+  border-color: rgba(132, 217, 194, 0.35);
+  background: rgba(132, 217, 194, 0.12);
+  color: #a4e1cf;
+}
+
+.action-confirmation.is-success a {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+}
+
+.action-cancelled {
+  margin: 12px 0 0;
+}
+
+.action-plan-status {
+  margin-top: 3px;
+  color: #8ccbb5;
+}
+
 .query-meta {
   display: flex;
   flex-wrap: wrap;
@@ -776,6 +896,126 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+}
+
+.dynamic-chart {
+  width: 100%;
+  margin-top: 13px;
+  overflow: hidden;
+  border: 1px solid rgba(158, 177, 202, 0.13);
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(22, 33, 47, 0.9), rgba(13, 20, 30, 0.9));
+  padding: 13px 10px 4px;
+}
+
+.dynamic-chart h4 {
+  margin: 0 5px 5px;
+  color: #d6dfeb;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dynamic-chart-canvas {
+  width: 100%;
+  min-width: 0;
+}
+
+.query-details {
+  width: 100%;
+  margin-top: 9px;
+}
+
+.query-details details {
+  border-top: 1px solid var(--line);
+}
+
+.query-details details:first-child {
+  border-top: 0;
+}
+
+.query-details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 31px;
+  cursor: pointer;
+  color: #9eacbd;
+  font-size: 10px;
+  list-style: none;
+}
+
+.query-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.query-details summary::before {
+  margin-right: 7px;
+  color: #78879a;
+  content: "▸";
+}
+
+.query-details details[open] summary::before {
+  content: "▾";
+}
+
+.query-details summary span {
+  margin-left: auto;
+  color: #69778a;
+  font-size: 9px;
+}
+
+.query-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.query-table-scroll table {
+  width: 100%;
+  min-width: max-content;
+  border-collapse: collapse;
+  color: #b8c4d2;
+  font-size: 10px;
+}
+
+.query-table-scroll th,
+.query-table-scroll td {
+  border-bottom: 1px solid rgba(158, 177, 202, 0.1);
+  padding: 8px 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.query-table-scroll th {
+  color: #91a0b3;
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.query-table-scroll tr:last-child td {
+  border-bottom: 0;
+}
+
+.query-details pre {
+  max-width: 100%;
+  max-height: 240px;
+  overflow: auto;
+  margin: 0 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #0a1017;
+  color: #b7c5d7;
+  font: 10px/1.6 "SFMono-Regular", Consolas, monospace;
+  padding: 10px;
+  white-space: pre-wrap;
+}
+
+.query-duration {
+  margin: 7px 0 0;
+  color: #758498;
+  font-size: 9px;
 }
 
 .query-success {
@@ -1098,11 +1338,6 @@ a {
   color: #657386;
 }
 
-.mock-data-label {
-  color: #708095;
-  font-size: 7px;
-}
-
 .visualization-empty {
   display: flex;
   min-height: 284px;
@@ -1218,14 +1453,6 @@ a {
 .positive-change {
   color: #82d7b4;
   font-weight: 650;
-}
-
-.mock-baseline {
-  margin-left: auto;
-  color: #657386;
-  font-size: 7px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
 }
 
 .big-number-sparkline {
@@ -1495,6 +1722,102 @@ a {
   font-size: 8px;
   line-height: 1.5;
   text-align: center;
+}
+
+.superset-embed {
+  position: fixed;
+  /* This is a true full-screen view. It must sit above the app header and
+     sidebar; otherwise they visually cover the embedded dashboard. */
+  z-index: 120;
+  inset: 0;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  padding: clamp(12px, 2vw, 24px);
+  background: #090d13;
+}
+
+.superset-embed-header {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #0d131c;
+  padding: 10px 14px 10px 16px;
+}
+
+.superset-embed-header h2 {
+  margin: 4px 0 0;
+  color: #f5f8fc;
+  font-size: 20px;
+}
+
+.superset-close {
+  border: 1px solid rgba(158, 177, 202, 0.22);
+  border-radius: 7px;
+  padding: 8px 12px;
+  background: transparent;
+  color: #dce6f2;
+  cursor: pointer;
+}
+
+.superset-embed-frame {
+  position: relative;
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  border: 1px solid rgba(158, 177, 202, 0.18);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.superset-embed-frame iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.superset-embed-error {
+  margin: 0;
+  border: 1px solid rgba(234, 79, 96, 0.45);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(234, 79, 96, 0.1);
+  color: #ffb8c0;
+}
+
+@media (max-width: 560px) {
+  .superset-embed {
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .superset-embed-header {
+    min-height: 52px;
+    padding: 8px 10px 8px 12px;
+  }
+
+  .superset-embed-header h2 {
+    max-width: 190px;
+    overflow: hidden;
+    font-size: 15px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .superset-close {
+    padding: 7px 9px;
+    font-size: 12px;
+  }
 }
 
 .sql-overlay {
@@ -1883,11 +2206,6 @@ a {
 
   .chat-toolbar {
     gap: 8px;
-  }
-
-  .mock-mode-badge {
-    font-size: 7px;
-    padding: 4px 5px;
   }
 
   .sql-overlay {

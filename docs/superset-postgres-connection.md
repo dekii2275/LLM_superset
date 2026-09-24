@@ -1,6 +1,6 @@
 # Kết nối Superset tới PostgreSQL
 
-Tài liệu này mô tả database connection `NYC Taxi PostgreSQL` đã được tạo trong Superset và cách tự kiểm tra hoặc tạo connection đó bằng UI. Phạm vi chỉ gồm kết nối tới dữ liệu analytics trong PostgreSQL `ai_bi`; phase này không tạo Superset Dataset, chart, dashboard hay SQL Lab analysis.
+Tài liệu này ghi lại phase thiết lập database connection `NYC Taxi PostgreSQL` trong Superset và cách tự kiểm tra hoặc tạo connection bằng UI. Bảng kết quả ở cuối là snapshot của phase connection trước khi hoàn tất BI flow. Trạng thái hiện tại của Dataset, metrics, charts và dashboard được cập nhật trong [hướng dẫn NYC Taxi dashboard](superset-nyc-taxi-dashboard.md).
 
 ## Hai database và hai mục đích
 

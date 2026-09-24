@@ -33,9 +33,9 @@ export function ServiceStatus() {
         </span>
       </div>
       <div className="service-status-item">
-        <span className="status-dot demo" />
+        <span className="status-dot connected" />
         <span className="service-status-name">Superset</span>
-        <span className="service-status-value">Demo</span>
+        <span className="service-status-value">Online</span>
       </div>
     </div>
   );

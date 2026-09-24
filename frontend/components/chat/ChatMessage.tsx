@@ -1,17 +1,31 @@
-import type { AnalysisResponse, ChatMessage as ChatMessageType } from "@/lib/types";
+import type { ChatMessage as ChatMessageType, CreateDashboardResult } from "@/lib/types";
 import { Icon } from "@/components/ui/Icon";
+import { DynamicChart } from "./DynamicChart";
+import { QueryResultDetails } from "./QueryResultDetails";
+import { ActionConfirmation, DashboardConfirmation, EditChartConfirmation, EditDashboardConfirmation } from "./ActionConfirmation";
 
 type ChatMessageProps = {
   message: ChatMessageType;
-  onViewSql: (analysis: AnalysisResponse) => void;
-  onViewVisualization: (analysis: AnalysisResponse) => void;
+  onDashboardCreated?: (result: CreateDashboardResult) => void;
+  onDashboardUpdated?: (result?: CreateDashboardResult) => void;
 };
 
 function formatTime(value: string): string {
   return new Date(value).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
 }
 
-export function ChatMessage({ message, onViewSql, onViewVisualization }: ChatMessageProps) {
+function actionLabel(action: string): string {
+  return action.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function parameterText(parameters: Record<string, unknown> | undefined): string[] {
+  if (!parameters) return [];
+  return Object.entries(parameters)
+    .filter(([key]) => key !== "request")
+    .map(([key, value]) => `${key.replace(/_/g, " ")}: ${String(value)}`);
+}
+
+export function ChatMessage({ message, onDashboardCreated, onDashboardUpdated }: ChatMessageProps) {
   const isAssistant = message.role === "assistant";
 
   return (
@@ -26,26 +40,59 @@ export function ChatMessage({ message, onViewSql, onViewVisualization }: ChatMes
         </div>
         <div className="message-content">{message.content}</div>
 
-        {message.analysis?.query && (
-          <div className="query-meta" aria-label="Query metadata">
-            <span className="query-success"><span className="status-dot connected" /> Query completed</span>
-            <span><Icon name="clock" size={13} /> {message.analysis.query.executionTimeMs} ms</span>
-            <span>{message.analysis.query.rowCount} rows</span>
-          </div>
+        {isAssistant && message.actionPlan && (
+          <section className="action-plan-card" aria-label="Planned BI action">
+            <span className="action-plan-kicker">Action preview</span>
+            <strong>{actionLabel(message.actionPlan.action)}</strong>
+            <p>{message.actionPlan.description}</p>
+            {message.actionPlan.target_name && (
+              <span className="action-plan-target">
+                {message.actionPlan.target_type ?? "target"}: {message.actionPlan.target_name}
+              </span>
+            )}
+            {parameterText(message.actionPlan.parameters).map((value) => (
+              <span className="action-plan-detail" key={value}>{value}</span>
+            ))}
+            <span className="action-plan-status">Ready for the next step — no changes made</span>
+          </section>
         )}
 
-        {message.analysis && (message.analysis.query || message.analysis.visualization) && (
-          <div className="message-actions">
-            {message.analysis.query && (
-              <button type="button" onClick={() => onViewSql(message.analysis!)}>
-                <Icon name="code" size={14} /> View SQL
-              </button>
-            )}
-            {message.analysis.visualization && (
-              <button type="button" onClick={() => onViewVisualization(message.analysis!)}>
-                <Icon name="chart" size={14} /> View visualization
-              </button>
-            )}
+        {isAssistant && message.query && !message.query.error && message.visualization && (
+          <DynamicChart spec={message.visualization} rows={message.query.rows} />
+        )}
+
+        {isAssistant && message.query && !message.query.error && (
+          <QueryResultDetails query={message.query} />
+        )}
+
+        {isAssistant && message.pendingAction?.action === "CREATE_CHART" && message.query && message.visualization && (
+          <ActionConfirmation
+            action={message.pendingAction}
+            query={message.query}
+            visualization={message.visualization}
+          />
+        )}
+
+        {isAssistant && message.pendingAction?.action === "CREATE_DASHBOARD" && (
+          <DashboardConfirmation action={message.pendingAction} onDashboardCreated={onDashboardCreated} />
+        )}
+
+        {isAssistant && message.pendingAction?.action === "EDIT_CHART" && (
+          <EditChartConfirmation action={message.pendingAction} onUpdated={() => onDashboardUpdated?.()} />
+        )}
+
+        {isAssistant && message.pendingAction?.action === "EDIT_DASHBOARD" && (
+          <EditDashboardConfirmation action={message.pendingAction} onUpdated={onDashboardUpdated} />
+        )}
+
+        {isAssistant && message.toolCalls && message.toolCalls.length > 0 && (
+          <div className="query-meta" aria-label="Superset tools used">
+            {message.toolCalls.map((toolCall, index) => (
+              <span key={`${toolCall.tool}-${index}`} title={toolCall.summary ?? undefined}>
+                <span className={`status-dot ${toolCall.status === "success" ? "connected" : "disconnected"}`} />
+                {toolCall.tool.replace(/_/g, " ")}
+              </span>
+            ))}
           </div>
         )}
       </div>

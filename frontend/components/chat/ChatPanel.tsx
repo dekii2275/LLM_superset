@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { AnalysisResponse, ChatMessage as ChatMessageType } from "@/lib/types";
+import type { ChatMessage as ChatMessageType, CreateDashboardResult } from "@/lib/types";
 import { ChatInput } from "./ChatInput";
 import { ChatMessage } from "./ChatMessage";
 import { EmptyChat } from "./EmptyChat";
@@ -12,8 +12,9 @@ type ChatPanelProps = {
   error: string | null;
   onInputChange: (value: string) => void;
   onSend: (question: string) => void;
-  onViewSql: (analysis: AnalysisResponse) => void;
-  onViewVisualization: (analysis: AnalysisResponse) => void;
+  onDashboardCreated?: (result: CreateDashboardResult) => void;
+  onDashboardUpdated?: (result?: CreateDashboardResult) => void;
+  loadingLabel?: string;
 };
 
 export function ChatPanel({
@@ -24,8 +25,9 @@ export function ChatPanel({
   error,
   onInputChange,
   onSend,
-  onViewSql,
-  onViewVisualization,
+  onDashboardCreated,
+  onDashboardUpdated,
+  loadingLabel = "Analyzing your data…",
 }: ChatPanelProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -43,7 +45,6 @@ export function ChatPanel({
             <span>Natural language analysis</span>
           </div>
         </div>
-        <span className="mock-mode-badge"><span className="status-dot demo" /> MOCK MODE</span>
       </div>
 
       <div className={`chat-scroll-region ${messages.length === 0 ? "is-empty" : ""}`}>
@@ -52,17 +53,12 @@ export function ChatPanel({
         ) : (
           <div className="message-list" aria-live="polite">
             {messages.map((message) => (
-              <ChatMessage
-                key={message.id}
-                message={message}
-                onViewSql={onViewSql}
-                onViewVisualization={onViewVisualization}
-              />
+              <ChatMessage key={message.id} message={message} onDashboardCreated={onDashboardCreated} onDashboardUpdated={onDashboardUpdated} />
             ))}
             {loading && (
               <div className="thinking-state" role="status" aria-live="polite">
                 <span className="thinking-avatar">✦</span>
-                <span>Analyzing your data</span>
+                <span>{loadingLabel}</span>
                 <span className="thinking-dots"><i /><i /><i /></span>
               </div>
             )}

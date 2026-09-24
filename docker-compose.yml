@@ -10,6 +10,8 @@ x-superset-environment: &superset-environment
   SUPERSET_DB_NAME: ${SUPERSET_DB_NAME:-superset}
   REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
   SUPERSET_CONFIG_PATH: /app/superset_config.py
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:43117}
+  MCP_DEV_USERNAME: ${MCP_DEV_USERNAME:-admin}
 
 services:
   postgres:
@@ -59,7 +61,20 @@ services:
       APP_ENV: ${APP_ENV:-development}
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:43117}
+      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:43117,http://127.0.0.1:43117}
       SUPERSET_URL: ${SUPERSET_URL:-http://superset:8088}
+      SUPERSET_PUBLIC_URL: ${SUPERSET_PUBLIC_URL:-http://localhost:58088}
+      SUPERSET_ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME:?Set SUPERSET_ADMIN_USERNAME in .env}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:?Set SUPERSET_ADMIN_PASSWORD in .env}
+      SUPERSET_MCP_INTERNAL_URL: ${SUPERSET_MCP_INTERNAL_URL:-http://superset-mcp:5008/mcp}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.6-flash}
+      AI_ALLOW_SUPERSET_WRITE: ${AI_ALLOW_SUPERSET_WRITE:-false}
+      SUPERSET_TAXI_DATASET_ID: ${SUPERSET_TAXI_DATASET_ID:-1}
+      DEFAULT_QUERY_LIMIT: ${DEFAULT_QUERY_LIMIT:-100}
+      MAX_QUERY_LIMIT: ${MAX_QUERY_LIMIT:-500}
+      AI_QUERY_TIMEOUT_SECONDS: ${AI_QUERY_TIMEOUT_SECONDS:-10}
+      AI_ANSWER_MAX_ROWS: ${AI_ANSWER_MAX_ROWS:-20}
     ports:
       - "127.0.0.1:48123:8000"
     volumes:
@@ -146,6 +161,36 @@ services:
     networks:
       - ai_bi_network
 
+  # Keep the MCP server separate from the Superset web process while sharing
+  # exactly the same image, configuration, metadata database, and home volume.
+  # This port is bound only to localhost for local-development testing.
+  superset-mcp:
+    build:
+      context: ./superset
+    restart: unless-stopped
+    environment:
+      <<: *superset-environment
+    volumes:
+      - superset_home:/app/superset_home
+    ports:
+      - "127.0.0.1:55008:5008"
+    command: ["superset", "mcp", "run", "--host", "0.0.0.0", "--port", "5008"]
+    depends_on:
+      superset-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 5008), 3).close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - ai_bi_network
+
   data-loader:
     profiles: ["tools"]
     build:
@@ -158,6 +203,7 @@ services:
       POSTGRES_PORT: "5432"
       APP_DB_NAME: ${APP_DB_NAME:-ai_bi}
       DATA_DIR: /data
+      DEMO_MAX_ROWS_PER_SOURCE: ${DEMO_MAX_ROWS_PER_SOURCE:-10000}
     volumes:
       - ./data:/data
     depends_on:

@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import math
+import os
 import re
 import sys
 from datetime import datetime, timezone
@@ -35,6 +37,7 @@ from nyc_taxi_common import (
 
 SCHEMA = "raw"
 BATCH_SIZE = 20_000
+DEMO_MAX_ROWS_PER_SOURCE = int(os.getenv("DEMO_MAX_ROWS_PER_SOURCE", "10000"))
 
 
 class ChangedSourceNeedsReload(RuntimeError):
@@ -186,18 +189,29 @@ def log_success(cur: psycopg.Cursor[Any], path: Path, source_type: str, row_coun
     )
 
 
-def ingest_parquet(path: Path, schema_fields: list[dict[str, Any]], file_hash: str) -> int:
+def ingest_parquet(
+    path: Path,
+    schema_fields: list[dict[str, Any]],
+    file_hash: str,
+    max_rows_per_source: int,
+) -> int:
     match = re.search(r"(\d{4})-(\d{2})", path.name)
     if not match:
         raise ValueError(f"Could not derive source year/month from {path.name!r}")
     source_year, source_month = int(match.group(1)), int(match.group(2))
     parquet = pq.ParquetFile(path)
     actual_rows = parquet.metadata.num_rows
+    sample_stride = (
+        max(1, math.ceil(actual_rows / max_rows_per_source))
+        if max_rows_per_source > 0
+        else 1
+    )
     source_to_normalized = {source: normalized for field in schema_fields for source in field["source_names"] for normalized in [field["column"]]}
     normalized_types = {field["column"]: field["postgres_type"] for field in schema_fields}
     source_fields = [(field.name, source_to_normalized[field.name]) for field in parquet.schema_arrow]
     copy_columns = [normalized for _, normalized in source_fields] + ["source_file", "source_year", "source_month", "loaded_at"]
     copied = 0
+    seen = 0
 
     with connect() as conn, conn.cursor() as cur:
         cur.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(sql.Identifier(SCHEMA)))
@@ -215,20 +229,24 @@ def ingest_parquet(path: Path, schema_fields: list[dict[str, Any]], file_hash: s
         with cur.copy(copy_query) as copy:
             for batch in parquet.iter_batches(batch_size=BATCH_SIZE):
                 for row in batch.to_pylist():
+                    seen += 1
+                    # An evenly spaced, deterministic sample preserves the
+                    # source's time distribution without retaining millions of
+                    # rows for a local demo. Set 0 to import every source row.
+                    if (seen - 1) % sample_stride != 0:
+                        continue
                     values = [adapt_parquet_value(row.get(source), normalized_types[normalized]) for source, normalized in source_fields]
                     values.extend([path.name, source_year, source_month, loaded_at])
                     copy.write_row(values)
                     copied += 1
-                print(f"  {path.name}: streamed {copied:,}/{actual_rows:,} rows", flush=True)
-        if copied != actual_rows:
-            raise RuntimeError(f"Parquet reports {actual_rows:,} rows but streamed {copied:,}")
+                print(f"  {path.name}: sampled {copied:,}/{actual_rows:,} rows", flush=True)
         cur.execute(
             sql.SQL("SELECT COUNT(*) FROM {}.{} WHERE source_file=%s").format(sql.Identifier(SCHEMA), sql.Identifier(TRIPS_TABLE)),
             (path.name,),
         )
         inserted = cur.fetchone()[0]
-        if inserted != actual_rows:
-            raise RuntimeError(f"PostgreSQL has {inserted:,} rows for {path.name}; expected {actual_rows:,}")
+        if inserted != copied:
+            raise RuntimeError(f"PostgreSQL has {inserted:,} rows for {path.name}; expected {copied:,}")
         log_success(cur, path, "parquet", inserted, file_hash)
     return copied
 
@@ -298,6 +316,15 @@ def main() -> int:
         "--reload", nargs="*", metavar="SOURCE_FILE",
         help="replace specified source file(s); with no names, reload every available source",
     )
+    parser.add_argument(
+        "--max-rows-per-source",
+        type=int,
+        default=DEMO_MAX_ROWS_PER_SOURCE,
+        help=(
+            "maximum rows retained from each Parquet source (default: "
+            f"{DEMO_MAX_ROWS_PER_SOURCE:,}; use 0 for a full import)"
+        ),
+    )
     args = parser.parse_args()
     try:
         trips = parquet_files()
@@ -333,7 +360,7 @@ def main() -> int:
                 if should_skip(path, file_hash, reload_names):
                     continue
                 print(f"Importing {path.name} ({path.stat().st_size:,} bytes)")
-                rows = ingest_parquet(path, schema_fields, file_hash)
+                rows = ingest_parquet(path, schema_fields, file_hash, args.max_rows_per_source)
                 print(f"  Imported and validated {rows:,} rows")
             except Exception as exc:
                 if not isinstance(exc, ChangedSourceNeedsReload):

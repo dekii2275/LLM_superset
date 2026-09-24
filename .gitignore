@@ -238,3 +238,14 @@ npm-debug.log*
 # Local editor / OS files
 .DS_Store
 Thumbs.db
+
+# Local analytics data and database exports. These artifacts are supplied
+# separately when deploying; keep only documentation and small fixtures in Git.
+data/*.parquet
+data/exports/*.dump
+data/exports/*.backup
+data/exports/*.sql
+data/exports/*.sql.gz
+data/exports/*.tar
+data/exports/*.tar.gz
+data/exports/*.zip
