@@ -33,7 +33,7 @@ export function EmbeddedDashboard({ onClose, dashboardId, title }: EmbeddedDashb
 
     async function mountDashboard() {
       try {
-        const resource = dashboardId ? `/superset/dashboard/${dashboardId}` : "/superset";
+        const resource = dashboardId ? `/api/v1/superset/dashboard/${dashboardId}` : "/api/v1/superset";
         const config = await getJson<EmbedConfig>(`${resource}/embed-config`);
         if (cancelled || !mountPoint.current) return;
 

@@ -4,7 +4,7 @@ from app.core.config import settings
 from app.services.superset import SupersetClient, SupersetEmbedError
 
 
-router = APIRouter(prefix="/superset", tags=["superset"])
+router = APIRouter(prefix="/api/v1/superset", tags=["superset"])
 
 
 def get_client() -> SupersetClient:
