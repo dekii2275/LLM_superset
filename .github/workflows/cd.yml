@@ -193,9 +193,20 @@ jobs:
           tar -xzf "/tmp/ai-bi-compose-$sha.tar.gz" -C "$app_root"
           cd "$app_root"
           export IMAGE_TAG="$sha"
-          docker compose --env-file "$app_root/.env.prod" \
-            -f docker-compose.yml -f docker-compose.prod.yml \
-            pull backend frontend superset-init superset superset-mcp public-gateway
+          compose=(docker compose --env-file "$app_root/.env.prod" \
+            -f docker-compose.yml -f docker-compose.prod.yml)
+          for attempt in 1 2 3; do
+            if "${compose[@]}" pull backend frontend superset-init superset superset-mcp public-gateway; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Image pull failed after 3 attempts." >&2
+              exit 1
+            fi
+            delay=$((attempt * 10))
+            echo "Image pull attempt $attempt failed; retrying in ${delay}s." >&2
+            sleep "$delay"
+          done
           if ! docker compose --env-file "$app_root/.env.prod" \
             -f docker-compose.yml -f docker-compose.prod.yml \
             up -d --no-build --wait \
