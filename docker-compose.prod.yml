@@ -2,7 +2,7 @@ services:
   backend:
     profiles: !reset []
     build: !reset null
-    image: ghcr.io/dekii2275/llm-superset-backend:${IMAGE_TAG:-latest}
+    image: ghcr.io/dekii2275/llm-superset-backend:${BACKEND_IMAGE_TAG:-${IMAGE_TAG:-latest}}
     restart: unless-stopped
     volumes: !reset []
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
@@ -12,22 +12,26 @@ services:
   frontend:
     profiles: !reset []
     build: !reset null
-    image: ghcr.io/dekii2275/llm-superset-frontend:${IMAGE_TAG:-latest}
+    image: ghcr.io/dekii2275/llm-superset-frontend:${FRONTEND_IMAGE_TAG:-${IMAGE_TAG:-latest}}
     restart: unless-stopped
     volumes: !reset []
-    command: ["npm", "run", "start"]
+    command: !reset null
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
 
   superset-init:
     build: !reset null
-    image: ghcr.io/dekii2275/llm-superset-superset:${IMAGE_TAG:-latest}
+    image: ghcr.io/dekii2275/llm-superset-superset:${SUPERSET_IMAGE_TAG:-${IMAGE_TAG:-latest}}
 
   superset:
     build: !reset null
-    image: ghcr.io/dekii2275/llm-superset-superset:${IMAGE_TAG:-latest}
+    image: ghcr.io/dekii2275/llm-superset-superset:${SUPERSET_IMAGE_TAG:-${IMAGE_TAG:-latest}}
 
   superset-mcp:
     build: !reset null
-    image: ghcr.io/dekii2275/llm-superset-superset:${IMAGE_TAG:-latest}
+    image: ghcr.io/dekii2275/llm-superset-superset:${SUPERSET_IMAGE_TAG:-${IMAGE_TAG:-latest}}
 
   public-gateway:
     image: nginx:stable-alpine

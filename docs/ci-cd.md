@@ -5,8 +5,13 @@
 commit-tagged images to GHCR. It deploys them to the Ubuntu server over SSH
 when the repository variable `DEPLOY_ENABLED` is set to `true`.
 
-CD builds backend, frontend, and Superset images and pushes commit-tagged images
-to GHCR. The VM pulls those images and restarts Compose without building app
+CD identifies backend, frontend, and Superset images by their Git directory tree;
+the frontend tag also includes its public build URLs. It builds only images whose
+content tag does not exist in GHCR, using a separate `:buildcache` per service.
+Unchanged images are reused and also tagged with the release commit and `latest`.
+The frontend runtime contains the Next.js standalone output, static assets, and
+public assets rather than the complete build environment.
+The VM pulls those images and restarts Compose without building app
 images there. CD copies only Compose/runtime support files; it does not copy the
 application source. Keep `.env.local`, `.env.prod`, and database exports off GitHub.
 
@@ -17,6 +22,24 @@ PostgreSQL and Redis use their native readiness checks; MCP is not exposed
 through the gateway. If a check fails, the workflow stops before connecting to
 the VM. The production deployment then waits for its own services to become
 healthy as a second check.
+
+SSH sends keepalive requests every 30 seconds. Each pull attempt is limited to
+five minutes, with up to three attempts; application startup is limited to eight
+minutes. CD recreates the gateway after application startup to refresh Nginx's
+upstream addresses, then checks the same five HTTP endpoints on the VM.
+Services whose content tag and Compose configuration are unchanged retain their
+running containers. Superset initialization may run again as a Compose dependency.
+
+After a successful deployment, `~/ai-bi-assistant/.images.prod` records the
+selected service tags. Preserve that mapping for manual operations:
+
+```bash
+docker compose --env-file .env.prod --env-file .images.prod \
+  -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build --wait
+```
+
+To refresh a base image or dependency, update the corresponding Dockerfile or
+dependency lock/version so the service content tag changes.
 
 ## Prepare the server
 

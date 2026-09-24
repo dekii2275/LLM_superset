@@ -20,6 +20,11 @@ jobs:
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      backend_tag: ${{ steps.images.outputs.backend_tag }}
+      frontend_tag: ${{ steps.images.outputs.frontend_tag }}
+      superset_tag: ${{ steps.images.outputs.superset_tag }}
     permissions:
       contents: read
       packages: write
@@ -37,39 +42,105 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Select images from service contents
+        id: images
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL || 'http://18.143.137.242:55200' }}
+          NEXT_PUBLIC_SUPERSET_URL: ${{ vars.NEXT_PUBLIC_SUPERSET_URL || 'http://18.143.137.242:55200/superset' }}
+        run: |
+          for service in backend frontend superset; do
+            source="$(git rev-parse "HEAD:$service")"
+            if [ "$service" = frontend ]; then
+              source="$(printf '%s\n' "$source" "$NEXT_PUBLIC_API_URL" "$NEXT_PUBLIC_SUPERSET_URL" | sha256sum | cut -d ' ' -f 1)"
+            fi
+            tag="source-$source"
+            image="ghcr.io/dekii2275/llm-superset-$service:$tag"
+            echo "${service}_tag=$tag" >> "$GITHUB_OUTPUT"
+            echo "- $service: \`$image\`" >> "$GITHUB_STEP_SUMMARY"
+            if docker buildx imagetools inspect "$image" >/dev/null 2>&1; then
+              echo "Reusing $image"
+              echo "${service}_build=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "Building $image"
+              echo "${service}_build=true" >> "$GITHUB_OUTPUT"
+            fi
+          done
+
       - name: Build and push backend image
+        if: steps.images.outputs.backend_build == 'true'
         uses: docker/build-push-action@v7
         with:
           context: ./backend
           push: true
+          cache-from: |
+            type=registry,ref=ghcr.io/dekii2275/llm-superset-backend:buildcache
+            type=registry,ref=ghcr.io/dekii2275/llm-superset-backend:latest
+          cache-to: type=registry,ref=ghcr.io/dekii2275/llm-superset-backend:buildcache,mode=max
           tags: |
+            ghcr.io/dekii2275/llm-superset-backend:${{ steps.images.outputs.backend_tag }}
             ghcr.io/dekii2275/llm-superset-backend:${{ github.event.workflow_run.head_sha }}
             ghcr.io/dekii2275/llm-superset-backend:latest
 
       - name: Build and push frontend image
+        if: steps.images.outputs.frontend_build == 'true'
         uses: docker/build-push-action@v7
         with:
           context: ./frontend
           push: true
+          cache-from: |
+            type=registry,ref=ghcr.io/dekii2275/llm-superset-frontend:buildcache
+            type=registry,ref=ghcr.io/dekii2275/llm-superset-frontend:latest
+          cache-to: type=registry,ref=ghcr.io/dekii2275/llm-superset-frontend:buildcache,mode=max
           build-args: |
             NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL || 'http://18.143.137.242:55200' }}
             NEXT_PUBLIC_SUPERSET_URL=${{ vars.NEXT_PUBLIC_SUPERSET_URL || 'http://18.143.137.242:55200/superset' }}
           tags: |
+            ghcr.io/dekii2275/llm-superset-frontend:${{ steps.images.outputs.frontend_tag }}
             ghcr.io/dekii2275/llm-superset-frontend:${{ github.event.workflow_run.head_sha }}
             ghcr.io/dekii2275/llm-superset-frontend:latest
 
       - name: Build and push Superset image
+        if: steps.images.outputs.superset_build == 'true'
         uses: docker/build-push-action@v7
         with:
           context: ./superset
           push: true
+          cache-from: |
+            type=registry,ref=ghcr.io/dekii2275/llm-superset-superset:buildcache
+            type=registry,ref=ghcr.io/dekii2275/llm-superset-superset:latest
+          cache-to: type=registry,ref=ghcr.io/dekii2275/llm-superset-superset:buildcache,mode=max
           tags: |
+            ghcr.io/dekii2275/llm-superset-superset:${{ steps.images.outputs.superset_tag }}
             ghcr.io/dekii2275/llm-superset-superset:${{ github.event.workflow_run.head_sha }}
             ghcr.io/dekii2275/llm-superset-superset:latest
+
+      - name: Tag reused images for this release
+        env:
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+          BACKEND_TAG: ${{ steps.images.outputs.backend_tag }}
+          FRONTEND_TAG: ${{ steps.images.outputs.frontend_tag }}
+          SUPERSET_TAG: ${{ steps.images.outputs.superset_tag }}
+          BUILD_BACKEND: ${{ steps.images.outputs.backend_build }}
+          BUILD_FRONTEND: ${{ steps.images.outputs.frontend_build }}
+          BUILD_SUPERSET: ${{ steps.images.outputs.superset_build }}
+        run: |
+          for service in backend frontend superset; do
+            name="${service^^}"
+            build_var="BUILD_$name"
+            tag_var="${name}_TAG"
+            if [ "${!build_var}" = false ]; then
+              image="ghcr.io/dekii2275/llm-superset-$service"
+              docker buildx imagetools create --tag "$image:$RELEASE_SHA" \
+                --tag "$image:latest" "$image:${!tag_var}"
+            fi
+          done
 
       - name: Smoke-test published images before deployment
         env:
           IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
+          BACKEND_IMAGE_TAG: ${{ steps.images.outputs.backend_tag }}
+          FRONTEND_IMAGE_TAG: ${{ steps.images.outputs.frontend_tag }}
+          SUPERSET_IMAGE_TAG: ${{ steps.images.outputs.superset_tag }}
         run: |
           cat > .env.smoke <<'EOF'
           POSTGRES_USER=ci
@@ -91,13 +162,13 @@ jobs:
           GEMINI_API_KEY=
           EOF
           compose=(docker compose --env-file .env.smoke -f docker-compose.yml -f docker-compose.prod.yml)
-          "${compose[@]}" pull backend frontend superset-init superset superset-mcp public-gateway
+          timeout --kill-after=15s 5m "${compose[@]}" pull backend frontend superset public-gateway
 
-          if ! "${compose[@]}" up -d --no-build --wait \
+          if ! timeout --kill-after=15s 8m "${compose[@]}" up -d --no-build --wait --wait-timeout 420 \
             backend frontend superset superset-mcp public-gateway; then
             echo "Candidate images failed Compose health checks." >&2
             "${compose[@]}" ps
-            "${compose[@]}" logs --tail=100 backend frontend superset superset-mcp public-gateway
+            "${compose[@]}" logs --tail=100 backend frontend superset-init superset superset-mcp public-gateway
             exit 1
           fi
 
@@ -108,7 +179,7 @@ jobs:
             if [ "$status" != "200" ]; then
               echo "Expected HTTP 200 from $url, got ${status:-no response}." >&2
               "${compose[@]}" ps
-              "${compose[@]}" logs --tail=100 backend frontend superset superset-mcp public-gateway
+              "${compose[@]}" logs --tail=100 backend frontend superset-init superset superset-mcp public-gateway
               return 1
             fi
           }
@@ -134,6 +205,7 @@ jobs:
     needs: publish
     if: vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: read
@@ -158,6 +230,13 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/deploy_key"
           chmod 600 "$HOME/.ssh/deploy_key"
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          cat > "$HOME/.ssh/config" <<'EOF'
+          Host *
+            ConnectTimeout 15
+            ServerAliveInterval 30
+            ServerAliveCountMax 6
+          EOF
+          chmod 600 "$HOME/.ssh/config"
 
       - name: Copy Compose configuration to server
         env:
@@ -176,6 +255,9 @@ jobs:
           DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
           GHCR_USERNAME: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BACKEND_IMAGE_TAG: ${{ needs.publish.outputs.backend_tag }}
+          FRONTEND_IMAGE_TAG: ${{ needs.publish.outputs.frontend_tag }}
+          SUPERSET_IMAGE_TAG: ${{ needs.publish.outputs.superset_tag }}
         run: |
           printf '%s' "$GHCR_TOKEN" |
             ssh -i "$HOME/.ssh/deploy_key" -o IdentitiesOnly=yes \
@@ -184,7 +266,7 @@ jobs:
 
           ssh -i "$HOME/.ssh/deploy_key" -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" \
-            "bash -s -- $DEPLOY_SHA" <<'REMOTE'
+            "bash -s -- $DEPLOY_SHA $BACKEND_IMAGE_TAG $FRONTEND_IMAGE_TAG $SUPERSET_IMAGE_TAG" <<'REMOTE'
           set -euo pipefail
           trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
           sha="$1"
@@ -193,10 +275,11 @@ jobs:
           tar -xzf "/tmp/ai-bi-compose-$sha.tar.gz" -C "$app_root"
           cd "$app_root"
           export IMAGE_TAG="$sha"
+          export BACKEND_IMAGE_TAG="$2" FRONTEND_IMAGE_TAG="$3" SUPERSET_IMAGE_TAG="$4"
           compose=(docker compose --env-file "$app_root/.env.prod" \
             -f docker-compose.yml -f docker-compose.prod.yml)
           for attempt in 1 2 3; do
-            if "${compose[@]}" pull backend frontend superset-init superset superset-mcp public-gateway; then
+            if timeout --kill-after=15s 5m "${compose[@]}" pull backend frontend superset public-gateway; then
               break
             fi
             if [ "$attempt" -eq 3 ]; then
@@ -207,18 +290,33 @@ jobs:
             echo "Image pull attempt $attempt failed; retrying in ${delay}s." >&2
             sleep "$delay"
           done
-          if ! docker compose --env-file "$app_root/.env.prod" \
-            -f docker-compose.yml -f docker-compose.prod.yml \
-            up -d --no-build --wait \
-            backend frontend superset superset-mcp public-gateway; then
+          if ! timeout --kill-after=15s 8m "${compose[@]}" up -d --no-build --wait --wait-timeout 420 \
+            backend frontend superset superset-mcp; then
             echo "Deployment failed: Compose did not report all services healthy." >&2
             docker compose --env-file "$app_root/.env.prod" \
               -f docker-compose.yml -f docker-compose.prod.yml ps
             docker compose --env-file "$app_root/.env.prod" \
               -f docker-compose.yml -f docker-compose.prod.yml \
-              logs --tail=100 backend frontend superset superset-mcp public-gateway
+              logs --tail=100 backend frontend superset-init superset superset-mcp public-gateway
             exit 1
           fi
+          # Refresh Nginx's upstream DNS after changed application containers start.
+          if ! timeout --kill-after=15s 2m "${compose[@]}" up -d --no-build --no-deps \
+            --force-recreate --wait --wait-timeout 90 public-gateway; then
+            "${compose[@]}" logs --tail=100 public-gateway
+            exit 1
+          fi
+          for endpoint in /health /health/db /health/superset / /superset/health; do
+            status="$(curl --connect-timeout 5 --max-time 20 --silent --show-error \
+              --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:55200$endpoint" || true)"
+            echo "$endpoint HTTP $status"
+            if [ "$status" != 200 ]; then
+              "${compose[@]}" logs --tail=100 backend frontend superset-init superset superset-mcp public-gateway
+              exit 1
+            fi
+          done
+          printf 'BACKEND_IMAGE_TAG=%s\nFRONTEND_IMAGE_TAG=%s\nSUPERSET_IMAGE_TAG=%s\n' \
+            "$BACKEND_IMAGE_TAG" "$FRONTEND_IMAGE_TAG" "$SUPERSET_IMAGE_TAG" > "$app_root/.images.prod"
           docker compose --env-file "$app_root/.env.prod" \
             -f docker-compose.yml -f docker-compose.prod.yml ps
           REMOTE
