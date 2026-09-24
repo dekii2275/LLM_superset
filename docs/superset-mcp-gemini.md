@@ -40,9 +40,9 @@ network controls, and least-privilege Superset roles.
 ## Run and verify MCP before Gemini
 
 ```bash
-docker compose up -d --build superset-mcp backend
-docker compose ps
-docker compose logs -f superset-mcp
+docker compose --env-file .env.local up -d --build superset-mcp backend
+docker compose --env-file .env.local ps
+docker compose --env-file .env.local logs -f superset-mcp
 ```
 
 The MCP protocol requires initialization before tool calls. The included Python
@@ -50,7 +50,7 @@ client performs the handshake and prints discovered tool names plus health,
 instance information, and dataset/dashboard searches:
 
 ```bash
-docker compose exec backend python scripts/test_superset_mcp.py
+docker compose --env-file .env.local exec backend python scripts/test_superset_mcp.py
 ```
 
 A protocol-level host test can be performed with a client that first sends an
@@ -66,7 +66,7 @@ their internal IDs.
 
 ## AI endpoints
 
-Set `GEMINI_API_KEY` and an available `GEMINI_MODEL` in `.env`, then rebuild the
+Set `GEMINI_API_KEY` and an available `GEMINI_MODEL` in `.env.local`, then rebuild the
 backend after the dependency change. The default is `gemini-3.6-flash`, matching
 the current Gemini API recommendation returned for new keys; override it if your
 project has access to a different supported model. The API starts without a key;

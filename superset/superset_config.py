@@ -14,9 +14,14 @@ if len(secret_key) < 32 or secret_key in placeholder_secrets:
 
 SECRET_KEY = secret_key
 
+application_root = os.environ.get("SUPERSET_APP_ROOT", "").strip().rstrip("/")
+if application_root:
+    APPLICATION_ROOT = application_root
+ENABLE_PROXY_FIX = os.environ.get("ENABLE_PROXY_FIX", "false").lower() == "true"
+
 # Enable the official embedded-dashboard flow.  The separate guest-token key
 # should be supplied in production; the fallback keeps existing local installs
-# working until that value is added to .env.
+# working until that value is added to the environment file.
 FEATURE_FLAGS = {"EMBEDDED_SUPERSET": True}
 GUEST_TOKEN_JWT_SECRET = os.environ.get("SUPERSET_GUEST_TOKEN_JWT_SECRET", secret_key)
 GUEST_TOKEN_JWT_EXP_SECONDS = 300
@@ -38,15 +43,14 @@ MCP_SERVICE_PORT = 5008
 # lets the explicit CSP `frame-ancestors` allow-list control embedding.
 from superset.config import TALISMAN_CONFIG as DEFAULT_TALISMAN_CONFIG
 
+frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:43117").rstrip("/")
+
 TALISMAN_CONFIG = {
     **DEFAULT_TALISMAN_CONFIG,
     "frame_options": None,
     "content_security_policy": {
         **DEFAULT_TALISMAN_CONFIG["content_security_policy"],
-        "frame-ancestors": [
-            "http://localhost:43117",
-            "http://127.0.0.1:43117",
-        ],
+        "frame-ancestors": [frontend_url],
     },
 }
 

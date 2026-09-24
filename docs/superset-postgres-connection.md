@@ -27,7 +27,7 @@ Không dùng `localhost:55439` trong SQLAlchemy URI của Superset: bên trong c
 postgresql://superset_reader:***@postgres:5432/ai_bi
 ```
 
-Mật khẩu reader được lưu cục bộ trong `.env` tại `SUPERSET_ANALYTICS_DB_PASSWORD`; file `.env` đang được Git ignore. `.env.example` chỉ có giá trị mẫu. Mật khẩu được tạo cho tài khoản này chỉ dùng ký tự URL-safe, nên không cần URL-encode. Nếu tự đặt mật khẩu có ký tự như `@`, `:`, `/`, `#` hoặc `%`, hãy URL-encode phần mật khẩu trong URI.
+Mật khẩu reader được lưu cục bộ trong `.env.local` tại `SUPERSET_ANALYTICS_DB_PASSWORD`; file này đang được Git ignore. `.env.example` chỉ có giá trị mẫu. Mật khẩu được tạo cho tài khoản này chỉ dùng ký tự URL-safe, nên không cần URL-encode. Nếu tự đặt mật khẩu có ký tự như `@`, `:`, `/`, `#` hoặc `%`, hãy URL-encode phần mật khẩu trong URI.
 
 ## Luồng kết nối
 
@@ -65,7 +65,7 @@ Role không có `SUPERUSER`, `CREATEDB`, `CREATEROLE`, `INSERT`, `UPDATE`, `DELE
 ## Xem connection hiện có trong UI
 
 1. Mở <http://localhost:58088>.
-2. Đăng nhập bằng tên người dùng trong `SUPERSET_ADMIN_USERNAME` ở `.env`.
+2. Đăng nhập bằng tên người dùng trong `SUPERSET_ADMIN_USERNAME` ở `.env.local`.
 3. Mở **Settings → Data: Database Connections**.
 4. Chọn **NYC Taxi PostgreSQL** để xem thông tin connection.
 5. Nếu cần kiểm tra lại, mở phần chỉnh sửa connection và bấm **Test Connection**. Kết quả mong đợi là kết nối thành công.
@@ -78,7 +78,7 @@ Superset 6.1.0 hướng dẫn flow **Settings → Data: Database Connections →
 2. Mở **Settings → Data: Database Connections** rồi chọn **+ DATABASE**.
 3. Chọn **PostgreSQL**.
 4. Đặt tên connection là `NYC Taxi PostgreSQL`.
-5. Chọn cách nhập **SQLAlchemy URI** và nhập URI dưới đây. Thay `***` bằng giá trị `SUPERSET_ANALYTICS_DB_PASSWORD` trong `.env`:
+5. Chọn cách nhập **SQLAlchemy URI** và nhập URI dưới đây. Thay `***` bằng giá trị `SUPERSET_ANALYTICS_DB_PASSWORD` trong `.env.local`:
 
    ```text
    postgresql://superset_reader:***@postgres:5432/ai_bi

@@ -19,6 +19,7 @@ The application is designed around the `ai_bi` PostgreSQL database and the
 
 - Git
 - Docker Engine or Docker Desktop with Docker Compose v2
+- Node.js 22+ with npm, and `uv` for the native frontend/backend workflow
 - Optional: Python 3 for the Superset setup script
 
 ## Repository and data policy
@@ -28,7 +29,7 @@ Git. Large or environment-specific data is deliberately ignored:
 
 - `data/*.parquet` — raw NYC Taxi source files
 - `data/exports/*.dump`, `.backup`, `.sql`, `.tar`, `.zip` — database exports
-- `.env` — credentials and deployment settings
+- `.env.local` and `.env.prod` — local and production credentials/settings
 
 Keep those files in private object storage, a secure backup system, or a
 separate release bundle. See [data/exports/README.md](data/exports/README.md)
@@ -41,10 +42,10 @@ for the current PostgreSQL archive format.
    ```powershell
    git clone <YOUR_REPOSITORY_URL>
    Set-Location LLM_superset
-   Copy-Item .env.example .env
+   Copy-Item .env.example .env.local
    ```
 
-2. Edit `.env`. At minimum, replace these placeholder values with unique
+2. Edit `.env.local`. At minimum, replace these placeholder values with unique
    secrets:
 
    - `POSTGRES_PASSWORD`
@@ -59,17 +60,63 @@ for the current PostgreSQL archive format.
 3. Start PostgreSQL, then load data by one of the methods below.
 
    ```powershell
-   docker compose up -d postgres
+   docker compose --env-file .env.local up -d postgres
    ```
 
-4. Start the full stack.
+4. Start the Docker services. By default this starts PostgreSQL, Redis, Superset,
+   and the Superset MCP server. The frontend and backend run natively below.
 
    ```powershell
-   docker compose up -d --build
-   docker compose ps
+   docker compose --env-file .env.local up -d
+   docker compose --env-file .env.local ps
    ```
 
-5. Initialize the Superset dataset and demo dashboard after Superset is
+5. Set up the native frontend/backend environments once.
+
+   ```powershell
+   # Backend: create one virtual environment at the repository root
+   $repo = (Get-Location).Path
+   $env:UV_CACHE_DIR = Join-Path $repo ".uv-cache"
+   $env:UV_PYTHON_INSTALL_DIR = Join-Path $repo ".uv-python"
+   uv venv --python 3.12
+   uv pip install --python .venv\Scripts\python.exe -r backend\requirements.txt
+
+   # Frontend: install dependencies and save its browser URLs
+   Set-Location frontend
+   $env:npm_config_cache = Join-Path $repo ".npm-cache"
+   Copy-Item local.env.example .env.local
+   npm ci
+   ```
+
+   The backend reads the repository `.env.local` automatically. Its `DATABASE_URL`,
+   `SUPERSET_URL`, and `SUPERSET_MCP_INTERNAL_URL` use host ports; Compose
+   overrides them with Docker service URLs for the optional containerized app.
+   The frontend reads `frontend/.env.local` automatically.
+
+6. Each time you start the project, open two PowerShell terminals.
+
+   **Backend terminal:**
+
+   ```powershell
+   Set-Location backend
+   & ..\.venv\Scripts\Activate.ps1
+   uvicorn app.main:app --host 127.0.0.1 --port 48123 --reload
+   ```
+
+   **Frontend terminal:**
+
+   ```powershell
+   Set-Location frontend
+   npm run dev
+   ```
+
+   The backend terminal activates the already-created root `.venv`, then runs
+   `uvicorn` from the backend directory. The backend reads the repository `.env.local`
+   automatically; no environment variables need to be re-entered at startup.
+   Run `uv pip install --python ..\.venv\Scripts\python.exe -r requirements.txt`
+   or `npm ci` again only after changing that app's dependencies.
+
+7. Initialize the Superset dataset and demo dashboard after Superset is
    healthy.
 
    ```powershell
@@ -84,6 +131,14 @@ Local URLs:
 | API docs | http://localhost:48123/docs |
 | Superset | http://localhost:58088 |
 
+To run the frontend and backend in Docker instead, opt in with
+`docker compose --env-file .env.local --profile app-containers up -d --build`.
+
+On Windows, enable **Start Docker Desktop when you sign in**. The infrastructure
+containers use Docker's `unless-stopped` restart policy, so they start with the
+Docker Engine. Avoid `docker compose --env-file .env.local down` if you want those containers to be
+there on the next Docker start; `down` removes them.
+
 ## Load analytics data
 
 Choose one method. Do this while only PostgreSQL is running for a clean first
@@ -96,16 +151,16 @@ Copy the private archive, such as `ai_bi_raw_20260924.dump`, into
 Do not unzip it.
 
 ```powershell
-docker compose cp data/exports/ai_bi_raw_20260924.dump postgres:/tmp/ai_bi_raw.dump
-docker compose exec -T postgres pg_restore -U ai_bi_user -d ai_bi --no-owner --no-privileges --clean --if-exists /tmp/ai_bi_raw.dump
+docker compose --env-file .env.local cp data/exports/ai_bi_raw_20260924.dump postgres:/tmp/ai_bi_raw.dump
+docker compose --env-file .env.local exec -T postgres pg_restore -U ai_bi_user -d ai_bi --no-owner --no-privileges --clean --if-exists /tmp/ai_bi_raw.dump
 ```
 
 `--clean --if-exists` replaces objects in the `raw` schema; omit those flags
 when restoring into an empty database. Replace `ai_bi_user` and `ai_bi` only
-if you changed `POSTGRES_USER` or `APP_DB_NAME` in `.env`. Verify the import:
+if you changed `POSTGRES_USER` or `APP_DB_NAME` in `.env.local`. Verify the import:
 
 ```powershell
-docker compose exec -T postgres psql -U ai_bi_user -d ai_bi -c "SELECT COUNT(*) FROM raw.yellow_taxi_trips;"
+docker compose --env-file .env.local exec -T postgres psql -U ai_bi_user -d ai_bi -c "SELECT COUNT(*) FROM raw.yellow_taxi_trips;"
 ```
 
 ### Option B — import source files
@@ -122,55 +177,54 @@ taxi_zone_lookup.csv
 Then run the loader:
 
 ```powershell
-docker compose --profile tools run --rm data-loader
+docker compose --env-file .env.local --profile tools run --rm data-loader
 ```
 
-Set `DEMO_MAX_ROWS_PER_SOURCE=0` in `.env` only if a full source import is
+Set `DEMO_MAX_ROWS_PER_SOURCE=0` in `.env.local` only if a full source import is
 intended. The default limits each input file to 10,000 rows for the demo.
 
 ## Operations
 
 ```powershell
 # Service status and logs
-docker compose ps
-docker compose logs -f backend
-docker compose logs -f frontend
-docker compose logs -f superset
+docker compose --env-file .env.local ps
+docker compose --env-file .env.local logs -f backend
+docker compose --env-file .env.local logs -f frontend
+docker compose --env-file .env.local logs -f superset
 
 # Health checks
 Invoke-WebRequest http://localhost:48123/health
 Invoke-WebRequest http://localhost:48123/health/db
 
 # Stop services but preserve database volumes
-docker compose down
+docker compose --env-file .env.local down
 ```
 
-`docker compose down -v` deletes PostgreSQL, Redis, Superset, and frontend
+`docker compose --env-file .env.local down -v` deletes PostgreSQL, Redis, Superset, and frontend
 volumes. Use it only when you intend to remove all local persisted state.
 
 ## Server deployment
 
-The base Compose file deliberately binds all service ports to `127.0.0.1`.
-For a server, use a TLS reverse proxy such as Nginx or Caddy and keep PostgreSQL,
-Redis, and the Superset MCP port private. Set the public URLs in `.env` before
-starting containers:
+Keep local settings in `.env.local` and production settings in `.env.prod`.
+The production overlay publishes one gateway on TCP port `55200`:
 
 ```dotenv
-FRONTEND_URL=https://bi.example.com
-FRONTEND_ORIGINS=https://bi.example.com
-NEXT_PUBLIC_API_URL=https://bi.example.com
-NEXT_PUBLIC_SUPERSET_URL=https://superset.example.com
-SUPERSET_PUBLIC_URL=https://superset.example.com
+APP_ENV=production
+FRONTEND_URL=http://18.143.137.242:55200
+FRONTEND_ORIGINS=http://18.143.137.242:55200
+NEXT_PUBLIC_API_URL=http://18.143.137.242:55200
+NEXT_PUBLIC_SUPERSET_URL=http://18.143.137.242:55200/superset
+SUPERSET_PUBLIC_URL=http://18.143.137.242:55200/superset
+SUPERSET_APP_ROOT=/superset
+ENABLE_PROXY_FIX=true
 ```
 
-Route `bi.example.com` to the local frontend port `43117` and its `/api/`
-path to local backend port `48123`. Route `superset.example.com` to local port
-`58088`. Full deployment order, proxy requirements, data restoration, and
-security checks are in [docs/deployment.md](docs/deployment.md).
+The CI/CD workflow reads `.env.prod` on the VM. Full deployment steps and
+security notes are in [docs/deployment.md](docs/deployment.md).
 
 ## Security notes
 
-- Never commit `.env`, database dumps, raw Parquet files, or exported tokens.
+- Never commit `.env.local`, `.env.prod`, database dumps, raw Parquet files, or exported tokens.
 - Set distinct, strong Superset and PostgreSQL secrets for every environment.
 - The app has no end-user authentication yet. Do not expose it publicly until
   authentication, authorization, and row-level security are configured.
@@ -179,6 +233,7 @@ security checks are in [docs/deployment.md](docs/deployment.md).
 ## Further documentation
 
 - [Deployment guide](docs/deployment.md)
+- [CI/CD setup](docs/ci-cd.md)
 - [Data export and restore guide](data/exports/README.md)
 - [Superset dashboard guide](docs/superset-nyc-taxi-dashboard.md)
 - [Gemini and Superset MCP guide](docs/superset-mcp-gemini.md)

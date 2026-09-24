@@ -228,6 +228,9 @@ __marimo__/
 __pycache__/
 *.pyc
 .venv/
+.uv-cache/
+.uv-python/
+.npm-cache/
 
 # Node.js / Next.js
 node_modules/

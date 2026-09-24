@@ -1,0 +1,204 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ghcr.io/dekii2275/llm-superset-backend:${{ github.event.workflow_run.head_sha }}
+            ghcr.io/dekii2275/llm-superset-backend:latest
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./frontend
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL || 'http://18.143.137.242:55200' }}
+            NEXT_PUBLIC_SUPERSET_URL=${{ vars.NEXT_PUBLIC_SUPERSET_URL || 'http://18.143.137.242:55200/superset' }}
+          tags: |
+            ghcr.io/dekii2275/llm-superset-frontend:${{ github.event.workflow_run.head_sha }}
+            ghcr.io/dekii2275/llm-superset-frontend:latest
+
+      - name: Build and push Superset image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./superset
+          push: true
+          tags: |
+            ghcr.io/dekii2275/llm-superset-superset:${{ github.event.workflow_run.head_sha }}
+            ghcr.io/dekii2275/llm-superset-superset:latest
+
+      - name: Smoke-test published images before deployment
+        env:
+          IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          cat > .env.smoke <<'EOF'
+          POSTGRES_USER=ci
+          POSTGRES_PASSWORD=ci_smoke_password
+          APP_DB_NAME=ai_bi
+          SUPERSET_DB_NAME=superset
+          SUPERSET_SECRET_KEY=ci-smoke-secret-key-with-more-than-32-characters
+          SUPERSET_ADMIN_USERNAME=ciadmin
+          SUPERSET_ADMIN_PASSWORD=ci_smoke_admin_password
+          SUPERSET_ADMIN_EMAIL=ci@example.com
+          SUPERSET_APP_ROOT=/superset
+          ENABLE_PROXY_FIX=true
+          FRONTEND_URL=http://localhost:55200
+          FRONTEND_ORIGINS=http://localhost:55200
+          SUPERSET_PUBLIC_URL=http://localhost:55200/superset
+          NEXT_PUBLIC_API_URL=http://localhost:55200
+          NEXT_PUBLIC_SUPERSET_URL=http://localhost:55200/superset
+          MCP_DEV_USERNAME=ciadmin
+          GEMINI_API_KEY=
+          EOF
+          compose=(docker compose --env-file .env.smoke -f docker-compose.yml -f docker-compose.prod.yml)
+          "${compose[@]}" pull backend frontend superset-init superset superset-mcp public-gateway
+
+          if ! "${compose[@]}" up -d --no-build --wait \
+            backend frontend superset superset-mcp public-gateway; then
+            echo "Candidate images failed Compose health checks." >&2
+            "${compose[@]}" ps
+            "${compose[@]}" logs --tail=100 backend frontend superset superset-mcp public-gateway
+            exit 1
+          fi
+
+          check_http_200() {
+            url="$1"
+            status="$(curl --connect-timeout 5 --max-time 20 --silent --show-error \
+              --output /dev/null --write-out '%{http_code}' "$url" || true)"
+            if [ "$status" != "200" ]; then
+              echo "Expected HTTP 200 from $url, got ${status:-no response}." >&2
+              "${compose[@]}" ps
+              "${compose[@]}" logs --tail=100 backend frontend superset superset-mcp public-gateway
+              return 1
+            fi
+          }
+
+          check_http_200 http://127.0.0.1:55200/health
+          check_http_200 http://127.0.0.1:55200/health/db
+          check_http_200 http://127.0.0.1:55200/health/superset
+          check_http_200 http://127.0.0.1:55200/
+          check_http_200 http://127.0.0.1:55200/superset/health
+
+      - name: Remove candidate smoke-test stack
+        if: always()
+        env:
+          IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [ -f .env.smoke ]; then
+            docker compose --env-file .env.smoke \
+              -f docker-compose.yml -f docker-compose.prod.yml \
+              down --volumes --remove-orphans || true
+          fi
+
+  deploy:
+    needs: publish
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Package Compose configuration
+        env:
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: >-
+          git archive --format=tar.gz --output=compose.tar.gz "$DEPLOY_SHA"
+          docker-compose.yml docker-compose.prod.yml database deploy
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/deploy_key"
+          chmod 600 "$HOME/.ssh/deploy_key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+
+      - name: Copy Compose configuration to server
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: >-
+          scp -i "$HOME/.ssh/deploy_key" -o IdentitiesOnly=yes
+          -o StrictHostKeyChecking=yes compose.tar.gz
+          "$DEPLOY_USER@$DEPLOY_HOST:/tmp/ai-bi-compose-$DEPLOY_SHA.tar.gz"
+
+      - name: Deploy with Docker Compose
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          ssh -i "$HOME/.ssh/deploy_key" -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" \
+            "bash -s -- $DEPLOY_SHA" <<'REMOTE'
+          set -euo pipefail
+          sha="$1"
+          app_root="$HOME/ai-bi-assistant"
+          test -f "$app_root/.env.prod" || { echo "Missing $app_root/.env.prod" >&2; exit 1; }
+          tar -xzf "/tmp/ai-bi-compose-$sha.tar.gz" -C "$app_root"
+          cd "$app_root"
+          export IMAGE_TAG="$sha"
+            docker compose --env-file "$app_root/.env.prod" \
+            -f docker-compose.yml -f docker-compose.prod.yml \
+            pull backend frontend superset-init superset superset-mcp public-gateway
+          if ! docker compose --env-file "$app_root/.env.prod" \
+            -f docker-compose.yml -f docker-compose.prod.yml \
+            up -d --no-build --wait \
+            backend frontend superset superset-mcp public-gateway; then
+            echo "Deployment failed: Compose did not report all services healthy." >&2
+            docker compose --env-file "$app_root/.env.prod" \
+              -f docker-compose.yml -f docker-compose.prod.yml ps
+            docker compose --env-file "$app_root/.env.prod" \
+              -f docker-compose.yml -f docker-compose.prod.yml \
+              logs --tail=100 backend frontend superset superset-mcp public-gateway
+            exit 1
+          fi
+          docker compose --env-file "$app_root/.env.prod" \
+            -f docker-compose.yml -f docker-compose.prod.yml ps
+          REMOTE

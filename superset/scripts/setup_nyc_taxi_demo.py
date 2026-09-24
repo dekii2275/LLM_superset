@@ -5,7 +5,7 @@ Run from the repository root after starting the Compose services:
     python superset/scripts/setup_nyc_taxi_demo.py
 
 The script uses only Python's standard library and reads Superset credentials
-from the process environment or the repository's local .env file.
+from the process environment or `.env.local` / `.env.prod`.
 """
 
 from __future__ import annotations
@@ -271,7 +271,7 @@ def ensure_dataset_metadata(client: SupersetClient, dataset_id: int) -> dict[str
         metrics.append(
             {
                 **definition,
-                "id": previous.get("id"),
+                **({"id": previous["id"]} if previous.get("id") is not None else {}),
                 "warning_text": previous.get("warning_text"),
                 "currency": previous.get("currency"),
                 "extra": previous.get("extra", "{}"),
@@ -636,12 +636,15 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    env_file = load_dotenv(ROOT / ".env")
+    env_path = ROOT / ".env.local"
+    if not env_path.is_file():
+        env_path = ROOT / ".env.prod"
+    env_file = load_dotenv(env_path)
     username = os.environ.get("SUPERSET_ADMIN_USERNAME", env_file.get("SUPERSET_ADMIN_USERNAME"))
     password = os.environ.get("SUPERSET_ADMIN_PASSWORD", env_file.get("SUPERSET_ADMIN_PASSWORD"))
     if not username or not password:
         raise SupersetError(
-            "Set SUPERSET_ADMIN_USERNAME and SUPERSET_ADMIN_PASSWORD in the environment or .env."
+            "Set SUPERSET_ADMIN_USERNAME and SUPERSET_ADMIN_PASSWORD in the environment, .env.local, or .env.prod."
         )
 
     client = SupersetClient(args.base_url, username, password)

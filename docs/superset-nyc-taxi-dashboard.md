@@ -87,13 +87,13 @@ URL: <http://localhost:58088/superset/dashboard/1/>
 
 ## Chạy lại setup
 
-Sau khi Docker Compose đang chạy và `.env` có Superset admin credentials:
+Sau khi Docker Compose đang chạy và `.env.local` có Superset admin credentials:
 
 ```powershell
 python superset/scripts/setup_nyc_taxi_demo.py
 ```
 
-Mặc định script gọi Superset trên host tại `http://localhost:58088`. Có thể đổi địa chỉ bằng `--base-url`. Script đọc credential từ biến môi trường hoặc `.env`, không ghi password/secret vào output, tái sử dụng database connection và tìm object theo tên trước khi tạo hoặc cập nhật.
+Mặc định script gọi Superset trên host tại `http://localhost:58088`. Có thể đổi địa chỉ bằng `--base-url`. Script đọc credential từ biến môi trường hoặc `.env.local` (hoặc `.env.prod` nếu file local không có), không ghi password/secret vào output, tái sử dụng database connection và tìm object theo tên trước khi tạo hoặc cập nhật.
 
 Script dùng Python standard library và Superset REST API của version đang chạy. Nó kiểm tra metadata Dataset, cập nhật metrics, upsert bốn chart, chạy query cho mỗi chart, tạo/cập nhật dashboard và in ID cùng URL.
 

@@ -22,7 +22,9 @@ class Settings(BaseSettings):
     ai_query_timeout_seconds: int = 10
     ai_answer_max_rows: int = 20
 
-    model_config = SettingsConfigDict(case_sensitive=False, extra="ignore")
+    model_config = SettingsConfigDict(
+        case_sensitive=False, env_file="../.env.local", extra="ignore"
+    )
 
 
 settings = Settings()

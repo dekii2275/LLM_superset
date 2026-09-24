@@ -20,7 +20,7 @@ SHA-256:
 
 The archive includes the `raw` schema, its tables, data, primary key, and
 indexes. It does not include PostgreSQL users/passwords, the `superset`
-metadata database, Docker volumes, or `.env` secrets.
+metadata database, Docker volumes, or `.env.local` / `.env.prod` secrets.
 
 ## Restore on a server
 

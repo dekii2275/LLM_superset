@@ -1,0 +1,53 @@
+services:
+  backend:
+    profiles: !reset []
+    build: !reset null
+    image: ghcr.io/dekii2275/llm-superset-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    volumes: !reset []
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      APP_ENV: production
+
+  frontend:
+    profiles: !reset []
+    build: !reset null
+    image: ghcr.io/dekii2275/llm-superset-frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    volumes: !reset []
+    command: ["npm", "run", "start"]
+
+  superset-init:
+    build: !reset null
+    image: ghcr.io/dekii2275/llm-superset-superset:${IMAGE_TAG:-latest}
+
+  superset:
+    build: !reset null
+    image: ghcr.io/dekii2275/llm-superset-superset:${IMAGE_TAG:-latest}
+
+  superset-mcp:
+    build: !reset null
+    image: ghcr.io/dekii2275/llm-superset-superset:${IMAGE_TAG:-latest}
+
+  public-gateway:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    ports:
+      - "55200:80"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+      superset:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - ai_bi_network
