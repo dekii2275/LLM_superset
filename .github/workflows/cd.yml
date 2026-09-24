@@ -136,6 +136,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v7
         with:
@@ -173,18 +174,26 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          printf '%s' "$GHCR_TOKEN" |
+            ssh -i "$HOME/.ssh/deploy_key" -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" \
+              "docker login ghcr.io --username '$GHCR_USERNAME' --password-stdin"
+
           ssh -i "$HOME/.ssh/deploy_key" -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" \
             "bash -s -- $DEPLOY_SHA" <<'REMOTE'
           set -euo pipefail
+          trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
           sha="$1"
           app_root="$HOME/ai-bi-assistant"
           test -f "$app_root/.env.prod" || { echo "Missing $app_root/.env.prod" >&2; exit 1; }
           tar -xzf "/tmp/ai-bi-compose-$sha.tar.gz" -C "$app_root"
           cd "$app_root"
           export IMAGE_TAG="$sha"
-            docker compose --env-file "$app_root/.env.prod" \
+          docker compose --env-file "$app_root/.env.prod" \
             -f docker-compose.yml -f docker-compose.prod.yml \
             pull backend frontend superset-init superset superset-mcp public-gateway
           if ! docker compose --env-file "$app_root/.env.prod" \
