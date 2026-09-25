@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
 import { ServiceStatus } from "@/components/system/ServiceStatus";
 
@@ -20,15 +21,18 @@ export function AppHeader({ sidebarOpen, onToggleSidebar }: AppHeaderProps) {
         <Icon name="menu" />
       </button>
 
-      <a className="brand" href="#main" aria-label="AI BI Assistant home">
+      <Link className="brand" href="/" aria-label="AI BI Assistant home">
         <span className="brand-mark"><Icon name="sparkle" size={19} /></span>
         <span className="brand-copy">
           <strong>AI BI Assistant</strong>
           <small>Conversational Analytics powered by Superset</small>
         </span>
-      </a>
+      </Link>
 
-      <ServiceStatus />
+      <div className="header-actions">
+        <Link className="settings-button" href="/settings">Settings</Link>
+        <ServiceStatus />
+      </div>
     </header>
   );
 }

@@ -1,11 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AppHeader } from "@/components/layout/AppHeader";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { AppLayout } from "@/components/layout/AppLayout";
 import { ChatPanel } from "@/components/chat/ChatPanel";
-import { VisualizationPanel } from "@/components/visualization/VisualizationPanel";
-import { ApiError, askAI } from "@/lib/api";
+import { ApiError, askAI, getAISettings } from "@/lib/api";
 import type { ChatMessage, CreateDashboardResult } from "@/lib/types";
 
 export default function Home() {
@@ -14,12 +12,19 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [embeddedDashboard, setEmbeddedDashboard] = useState<CreateDashboardResult | null>(null);
-  const [dashboardRefresh, setDashboardRefresh] = useState(0);
   const [loadingLabel, setLoadingLabel] = useState("Analyzing your data…");
+  const [llmEnabled, setLlmEnabled] = useState<boolean | null>(null);
   const loadingRef = useRef(false);
   const requestIdRef = useRef(0);
+
+  useEffect(() => {
+    let active = true;
+    void getAISettings()
+      .then((settings) => { if (active) setLlmEnabled(settings.llm_enabled); })
+      .catch(() => { if (active) setLlmEnabled(false); });
+    return () => { active = false; };
+  }, []);
 
   const handleNewAnalysis = useCallback(() => {
     requestIdRef.current += 1;
@@ -29,9 +34,7 @@ export default function Home() {
     setError(null);
     loadingRef.current = false;
     setLoading(false);
-    setSidebarOpen(false);
     setEmbeddedDashboard(null);
-    setDashboardRefresh(0);
   }, []);
 
   useEffect(() => {
@@ -47,6 +50,10 @@ export default function Home() {
 
   const handleSend = async (question: string) => {
     const trimmed = question.trim();
+    if (llmEnabled !== true) {
+      setError("Bật AI chat trong Settings trước khi gửi câu hỏi.");
+      return;
+    }
     if (!trimmed || loadingRef.current) return;
 
     const requestId = ++requestIdRef.current;
@@ -103,39 +110,22 @@ export default function Home() {
   };
 
   return (
-    <div className={`app-frame ${sidebarOpen ? "sidebar-open" : ""}`}>
-      <AppHeader sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen((open) => !open)} />
-      <main className="workspace" id="main">
-        <Sidebar onNewAnalysis={handleNewAnalysis} />
-        {sidebarOpen && (
-          <button
-            className="mobile-sidebar-scrim"
-            type="button"
-            aria-label="Close navigation"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-        <ChatPanel
-          title={conversationTitle}
-          messages={messages}
-          input={input}
-          loading={loading}
-          error={error}
-          onInputChange={setInput}
-          onSend={handleSend}
-          onDashboardCreated={setEmbeddedDashboard}
-          onDashboardUpdated={(result) => {
-            if (result?.dashboard_id) setEmbeddedDashboard(result);
-            setDashboardRefresh((value) => value + 1);
-          }}
-          loadingLabel={loadingLabel}
-        />
-        <VisualizationPanel
-          dashboardId={embeddedDashboard?.dashboard_id ?? undefined}
-          dashboardTitle={embeddedDashboard?.dashboard_name ?? undefined}
-          refreshToken={dashboardRefresh}
-        />
-      </main>
-    </div>
+    <AppLayout onNewAnalysis={handleNewAnalysis}>
+      <ChatPanel
+        title={conversationTitle}
+        messages={messages}
+        input={input}
+        loading={loading}
+        llmEnabled={llmEnabled}
+        error={error}
+        onInputChange={setInput}
+        onSend={handleSend}
+        onDashboardCreated={setEmbeddedDashboard}
+        onDashboardUpdated={(result) => {
+          if (result?.dashboard_id) setEmbeddedDashboard(result);
+        }}
+        loadingLabel={loadingLabel}
+      />
+    </AppLayout>
   );
 }

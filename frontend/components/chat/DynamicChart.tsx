@@ -25,7 +25,7 @@ type DynamicChartProps = {
   eyebrow?: string;
 };
 
-const COLORS = ["#92a1ff", "#84d9c2", "#edbd79", "#d59cff", "#f08e91", "#70b7ed", "#b6d477", "#e7a0b6"];
+const COLORS = ["#0E4A86", "#0072CE", "#D9232D", "#64748B", "#36A4E8", "#15803D", "#F59E0B", "#7C3AED"];
 
 function formatValue(value: unknown): string {
   if (typeof value === "number") {
@@ -52,12 +52,12 @@ export function DynamicChart({ spec, rows, eyebrow }: DynamicChartProps) {
   }
 
   const commonAxes = <>
-    <CartesianGrid stroke="rgba(158, 177, 202, 0.12)" vertical={false} />
+    <CartesianGrid stroke="rgba(15, 23, 42, 0.1)" vertical={false} />
     <XAxis
       dataKey={spec.x_axis}
       tickFormatter={tickLabel}
-      stroke="#718095"
-      tick={{ fill: "#8c9bad", fontSize: 10 }}
+      stroke="#CBD5E1"
+      tick={{ fill: "#64748B", fontSize: 10 }}
       axisLine={false}
       tickLine={false}
       interval={0}
@@ -67,8 +67,8 @@ export function DynamicChart({ spec, rows, eyebrow }: DynamicChartProps) {
     />
     <YAxis
       tickFormatter={tickLabel}
-      stroke="#718095"
-      tick={{ fill: "#8c9bad", fontSize: 10 }}
+      stroke="#CBD5E1"
+      tick={{ fill: "#64748B", fontSize: 10 }}
       axisLine={false}
       tickLine={false}
       width={66}
@@ -77,10 +77,10 @@ export function DynamicChart({ spec, rows, eyebrow }: DynamicChartProps) {
       formatter={(value) => formatValue(value)}
       labelFormatter={(label) => tickLabel(label)}
       contentStyle={{
-        border: "1px solid rgba(158, 177, 202, 0.2)",
+        border: "1px solid rgba(15, 23, 42, 0.18)",
         borderRadius: 8,
-        background: "#101823",
-        color: "#e6edf5",
+        background: "#FFFFFF",
+        color: "#0F172A",
         fontSize: 11,
       }}
     />
@@ -95,31 +95,31 @@ export function DynamicChart({ spec, rows, eyebrow }: DynamicChartProps) {
           {spec.type === "bar" ? (
             <BarChart data={rows} margin={{ top: 12, right: 10, left: -12, bottom: 0 }}>
               {commonAxes}
-              <Bar dataKey={spec.y_axis} fill="#92a1ff" radius={[5, 5, 0, 0]} maxBarSize={48} />
+              <Bar dataKey={spec.y_axis} fill="#0E4A86" radius={[5, 5, 0, 0]} maxBarSize={48} />
             </BarChart>
           ) : spec.type === "line" ? (
             <LineChart data={rows} margin={{ top: 12, right: 10, left: -12, bottom: 0 }}>
               {commonAxes}
-              <Line type="monotone" dataKey={spec.y_axis} stroke="#84d9c2" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+              <Line type="monotone" dataKey={spec.y_axis} stroke="#0072CE" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
             </LineChart>
           ) : spec.type === "area" ? (
             <AreaChart data={rows} margin={{ top: 12, right: 10, left: -12, bottom: 0 }}>
               <defs>
                 <linearGradient id="query-area" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#84d9c2" stopOpacity={0.45} />
-                  <stop offset="95%" stopColor="#84d9c2" stopOpacity={0.02} />
+                  <stop offset="5%" stopColor="#0072CE" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#0072CE" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
               {commonAxes}
-              <Area type="monotone" dataKey={spec.y_axis} stroke="#84d9c2" fill="url(#query-area)" strokeWidth={2.2} />
+              <Area type="monotone" dataKey={spec.y_axis} stroke="#0072CE" fill="url(#query-area)" strokeWidth={2.2} />
             </AreaChart>
           ) : (
             <PieChart>
               <Tooltip
                 formatter={(value) => formatValue(value)}
-                contentStyle={{ border: "1px solid rgba(158, 177, 202, 0.2)", borderRadius: 8, background: "#101823", fontSize: 11 }}
+                contentStyle={{ border: "1px solid rgba(15, 23, 42, 0.18)", borderRadius: 8, background: "#FFFFFF", color: "#0F172A", fontSize: 11 }}
               />
-              <Legend wrapperStyle={{ fontSize: 10, color: "#a3b0c0" }} />
+              <Legend wrapperStyle={{ fontSize: 10, color: "#475569" }} />
               <Pie data={rows} dataKey={spec.y_axis} nameKey={spec.x_axis} cx="50%" cy="45%" outerRadius={86} paddingAngle={2}>
                 {rows.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
               </Pie>

@@ -9,6 +9,7 @@ type ChatPanelProps = {
   messages: ChatMessageType[];
   input: string;
   loading: boolean;
+  llmEnabled: boolean | null;
   error: string | null;
   onInputChange: (value: string) => void;
   onSend: (question: string) => void;
@@ -22,6 +23,7 @@ export function ChatPanel({
   messages,
   input,
   loading,
+  llmEnabled,
   error,
   onInputChange,
   onSend,
@@ -49,7 +51,7 @@ export function ChatPanel({
 
       <div className={`chat-scroll-region ${messages.length === 0 ? "is-empty" : ""}`}>
         {messages.length === 0 ? (
-          <EmptyChat onAsk={onSend} />
+          <EmptyChat onAsk={onSend} disabled={llmEnabled !== true} />
         ) : (
           <div className="message-list" aria-live="polite">
             {messages.map((message) => (
@@ -68,7 +70,7 @@ export function ChatPanel({
         )}
       </div>
 
-      <ChatInput value={input} loading={loading} onChange={onInputChange} onSend={onSend} />
+      <ChatInput value={input} loading={loading} llmEnabled={llmEnabled} onChange={onInputChange} onSend={onSend} />
     </section>
   );
 }

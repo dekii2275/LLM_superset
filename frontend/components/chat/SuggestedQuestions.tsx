@@ -9,13 +9,13 @@ const SUGGESTED_QUESTIONS = [
   "Đổi Monthly Trip Volume thành bar chart.",
 ];
 
-type SuggestedQuestionsProps = { onSelect: (question: string) => void };
+type SuggestedQuestionsProps = { onSelect: (question: string) => void; disabled: boolean };
 
-export function SuggestedQuestions({ onSelect }: SuggestedQuestionsProps) {
+export function SuggestedQuestions({ onSelect, disabled }: SuggestedQuestionsProps) {
   return (
     <div className="suggestion-grid" aria-label="Suggested questions">
       {SUGGESTED_QUESTIONS.map((question, index) => (
-        <button className="suggestion-card" type="button" onClick={() => onSelect(question)} key={question}>
+        <button className="suggestion-card" type="button" onClick={() => onSelect(question)} disabled={disabled} key={question}>
           <span className={`suggestion-icon suggestion-icon-${(index % 4) + 1}`}>
             <Icon name={index === 1 || index === 2 ? "chart" : index === 3 ? "database" : "sparkle"} size={16} />
           </span>

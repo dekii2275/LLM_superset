@@ -31,6 +31,8 @@ services:
   superset:
     build: !reset null
     image: ghcr.io/dekii2275/llm-superset-superset:${SUPERSET_IMAGE_TAG:-${IMAGE_TAG:-latest}}
+    environment:
+      SUPERSET_EMBEDDED_ALLOWED_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:43117,http://127.0.0.1:43117}
     healthcheck:
       test:
         - CMD

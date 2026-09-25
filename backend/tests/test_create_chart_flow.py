@@ -179,7 +179,11 @@ class ExecuteBoundaryTests(unittest.IsolatedAsyncioTestCase):
             chart_ids=[12, 13, 14, 15], message="Dashboard created successfully.",
         )
         request = ActionExecutionRequest(action=AIIntent.CREATE_DASHBOARD, dashboard_plan=plan)
-        with patch("app.api.ai.AIBIService.prepare_dashboard_charts", new=AsyncMock(return_value=[])), patch("app.api.ai.SupersetWriteService") as writer:
+        with (
+            patch("app.api.ai.is_llm_enabled", return_value=True),
+            patch("app.api.ai.AIBIService.prepare_dashboard_charts", new=AsyncMock(return_value=[])),
+            patch("app.api.ai.SupersetWriteService") as writer,
+        ):
             writer.return_value.create_dashboard = AsyncMock(return_value=result)
             response = await execute_action(request)
         self.assertTrue(response.success)
@@ -188,7 +192,11 @@ class ExecuteBoundaryTests(unittest.IsolatedAsyncioTestCase):
     async def test_dashboard_chart_prepare_failure_stops_before_dashboard_write(self) -> None:
         plan = await DashboardGemini().generate_dashboard_plan("dashboard")
         request = ActionExecutionRequest(action=AIIntent.CREATE_DASHBOARD, dashboard_plan=plan)
-        with patch("app.api.ai.AIBIService.prepare_dashboard_charts", new=AsyncMock(side_effect=RuntimeError("Chart 2 failed"))), patch("app.api.ai.SupersetWriteService") as writer:
+        with (
+            patch("app.api.ai.is_llm_enabled", return_value=True),
+            patch("app.api.ai.AIBIService.prepare_dashboard_charts", new=AsyncMock(side_effect=RuntimeError("Chart 2 failed"))),
+            patch("app.api.ai.SupersetWriteService") as writer,
+        ):
             response = await execute_action(request)
         self.assertFalse(response.success)
         self.assertIsNone(response.result)

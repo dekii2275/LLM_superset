@@ -3,6 +3,7 @@
 Run from the repository root after Superset and PostgreSQL are available:
 
     python superset/scripts/setup_nyc_taxi_analytics.py
+    python superset/scripts/setup_nyc_taxi_analytics.py --style-only
 
 The script reads Superset credentials from the process environment or
 `.env.local` / `.env.prod`. It creates a SQL-backed dataset that joins taxi
@@ -46,20 +47,32 @@ def dashboard_background_css() -> str:
     return f"""\
 .dashboard-content {{
   background-color: #eef8f3 !important;
-  background-image: linear-gradient(rgba(239, 249, 244, 0.84), rgba(239, 249, 244, 0.84)), url("data:image/png;base64,{image}") !important;
+  background-image: linear-gradient(rgba(239, 249, 244, 0.58), rgba(239, 249, 244, 0.58)), url("data:image/png;base64,{image}") !important;
   background-size: cover !important;
   background-position: center center !important;
   background-repeat: no-repeat !important;
   background-attachment: fixed !important;
 }}
+.dashboard-content .dashboard-component {{
+  background: transparent !important;
+}}
 .dashboard-content .dashboard-component-chart-holder {{
-  background-color: rgba(255, 255, 255, 0.95) !important;
+  background: rgba(255, 255, 255, 0.75) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  backdrop-filter: blur(8px) !important;
   border: 1px solid rgba(173, 199, 189, 0.8) !important;
   border-radius: 12px !important;
   box-shadow: 0 8px 24px rgba(29, 54, 46, 0.14) !important;
 }}
-.dashboard-content .dashboard-component-tabs {{
+.dashboard-content .dashboard-component-chart-holder .dashboard-chart,
+.dashboard-content .dashboard-component-chart-holder .chart-container,
+.dashboard-content .dashboard-component-chart-holder .slice_container,
+.dashboard-content .dashboard-component-chart-holder canvas {{
+  background: transparent !important;
   background-color: transparent !important;
+}}
+.dashboard-content .dashboard-component-tabs {{
+  background: transparent !important;
 }}
 """
 
@@ -1052,6 +1065,27 @@ def upsert_dashboard(
     return client.request("GET", f"/api/v1/dashboard/{dashboard_id}").get("result", {})
 
 
+def update_dashboard_css(client: SupersetClient) -> int:
+    dashboard = next(
+        (
+            item
+            for item in client.list_objects("dashboard")
+            if item.get("dashboard_title") == DASHBOARD_TITLE
+        ),
+        None,
+    )
+    if not dashboard:
+        raise SupersetError(f"Dashboard {DASHBOARD_TITLE!r} was not found.")
+
+    dashboard_id = int(dashboard["id"])
+    client.request(
+        "PUT",
+        f"/api/v1/dashboard/{dashboard_id}",
+        {"css": dashboard_background_css()},
+    )
+    return dashboard_id
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -1067,6 +1101,11 @@ def main() -> int:
         "--years",
         help="Optional comma-separated source years (for example 2017,2018). "
         "By default, use the two latest years available.",
+    )
+    parser.add_argument(
+        "--style-only",
+        action="store_true",
+        help="Update only this dashboard's CSS, leaving charts and layout untouched.",
     )
     args = parser.parse_args()
 
@@ -1086,6 +1125,14 @@ def main() -> int:
 
     client = SupersetClient(args.base_url, username, password)
     client.login()
+    if args.style_only:
+        dashboard_id = update_dashboard_css(client)
+        print(
+            f"Updated CSS for {DASHBOARD_TITLE} (ID {dashboard_id}); "
+            "charts and layout were untouched."
+        )
+        return 0
+
     version = get_server_version(client)
     database = find_database(client)
     database_id = int(database["id"])

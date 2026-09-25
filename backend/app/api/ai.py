@@ -1,6 +1,7 @@
 import logging
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from app.core.config import settings
 from app.schemas.ai import (
@@ -12,6 +13,7 @@ from app.schemas.ai import (
     EditDashboardOperation,
 )
 from app.services.ai_bi_service import AIBIService
+from app.services.ai_settings import is_llm_enabled, set_llm_enabled
 from app.services.gemini_service import GeminiService
 from app.services.mcp_service import MCPToolError, MCPUnavailableError, SupersetMCPService
 from app.services.query_service import QueryService, SQLValidationError
@@ -20,6 +22,10 @@ from app.services.visualization_service import VisualizationService
 
 router = APIRouter(prefix="/api/v1/ai", tags=["ai"])
 logger = logging.getLogger(__name__)
+
+
+class AISettingsUpdate(BaseModel):
+    llm_enabled: bool
 
 
 def mcp_service() -> SupersetMCPService:
@@ -46,8 +52,20 @@ async def ai_health() -> dict[str, str | bool]:
     }
 
 
+@router.get("/settings")
+def get_ai_settings() -> dict[str, bool]:
+    return {"llm_enabled": is_llm_enabled()}
+
+
+@router.put("/settings")
+def update_ai_settings(request: AISettingsUpdate) -> dict[str, bool]:
+    return {"llm_enabled": set_llm_enabled(request.llm_enabled)}
+
+
 @router.post("/chat", response_model=AIChatResponse)
 async def ai_chat(request: AIChatRequest) -> AIChatResponse:
+    if not is_llm_enabled():
+        raise HTTPException(status_code=503, detail="AI đã tắt trong Settings. Hãy bật lại để tiếp tục chat.")
     if not settings.gemini_api_key:
         raise HTTPException(status_code=503, detail="Gemini API is not configured")
     service = AIBIService(
@@ -155,6 +173,8 @@ async def execute_action(request: ActionExecutionRequest) -> ActionExecutionResp
         return ActionExecutionResponse(success=result.success, action=AIIntent.EDIT_DASHBOARD, result=result if result.success else None, message=result.message, error=result.error)
 
     if request.action == AIIntent.CREATE_DASHBOARD:
+        if not is_llm_enabled():
+            raise HTTPException(status_code=503, detail="AI đã tắt trong Settings. Hãy bật lại để tạo dashboard.")
         if not request.dashboard_plan:
             raise HTTPException(status_code=422, detail="A dashboard plan is required.")
         if not 3 <= len(request.dashboard_plan.charts) <= 4:

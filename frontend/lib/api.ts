@@ -21,6 +21,30 @@ export class ApiError extends Error {
   }
 }
 
+export type AISettings = { llm_enabled: boolean };
+
+export async function getAISettings(): Promise<AISettings> {
+  const response = await fetch(apiUrl("/api/v1/ai/settings"), { cache: "no-store" });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { detail?: string } | null;
+    throw new ApiError(payload?.detail ?? "Could not load AI settings.", response.status);
+  }
+  return response.json() as Promise<AISettings>;
+}
+
+export async function setAIEnabled(llmEnabled: boolean): Promise<AISettings> {
+  const response = await fetch(apiUrl("/api/v1/ai/settings"), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ llm_enabled: llmEnabled }),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { detail?: string } | null;
+    throw new ApiError(payload?.detail ?? "Could not update AI settings.", response.status);
+  }
+  return response.json() as Promise<AISettings>;
+}
+
 export async function askAI(message: string, context?: AIChatContext): Promise<AIChatResponse> {
   const response = await fetch(apiUrl("/api/v1/ai/chat"), {
     method: "POST",

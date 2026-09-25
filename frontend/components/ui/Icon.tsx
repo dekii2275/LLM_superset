@@ -6,6 +6,8 @@ export type IconName =
   | "message"
   | "database"
   | "chart"
+  | "user"
+  | "settings"
   | "menu"
   | "arrow-up-right"
   | "arrow-up"
@@ -45,6 +47,12 @@ export function Icon({ name, size = 18, ...props }: IconProps) {
       break;
     case "chart":
       content = <><path d="M4 19V5M4 19h16" /><path d="m7 15 3-4 3 2 5-6" /><path d="M17 7h1v1" /></>;
+      break;
+    case "user":
+      content = <><circle cx="12" cy="8" r="3.5" /><path d="M5 20a7 7 0 0 1 14 0" /></>;
+      break;
+    case "settings":
+      content = <><circle cx="12" cy="12" r="3" /><path d="m19.4 15 .1.1 1.1.9-1.2 2.1-1.4-.5a7.8 7.8 0 0 1-1.7 1l-.2 1.5h-2.4l-.3-1.5a7.8 7.8 0 0 1-1.7-1l-1.4.5-1.2-2.1 1.1-.9a7.3 7.3 0 0 1 0-2l-1.1-.9 1.2-2.1 1.4.5a7.8 7.8 0 0 1 1.7-1l.3-1.5h2.4l.2 1.5a7.8 7.8 0 0 1 1.7 1l1.4-.5 1.2 2.1-1.1.9a7.3 7.3 0 0 1 0 2Z" transform="translate(-1 -1) scale(1.08)" /></>;
       break;
     case "menu":
       content = <><path d="M4 6h16M4 12h16M4 18h16" /></>;

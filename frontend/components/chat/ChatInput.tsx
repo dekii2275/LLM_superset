@@ -3,12 +3,14 @@ import { Icon } from "@/components/ui/Icon";
 type ChatInputProps = {
   value: string;
   loading: boolean;
+  llmEnabled: boolean | null;
   onChange: (value: string) => void;
   onSend: (question: string) => void;
 };
 
-export function ChatInput({ value, loading, onChange, onSend }: ChatInputProps) {
-  const canSend = value.trim().length > 0 && !loading;
+export function ChatInput({ value, loading, llmEnabled, onChange, onSend }: ChatInputProps) {
+  const canSend = value.trim().length > 0 && !loading && llmEnabled === true;
+  const chatDisabled = llmEnabled !== true;
 
   return (
     <form
@@ -29,9 +31,9 @@ export function ChatInput({ value, loading, onChange, onSend }: ChatInputProps) 
             if (canSend) onSend(value);
           }
         }}
-        placeholder="Ask a question about your data..."
+        placeholder={llmEnabled === false ? "Turn on AI chat in Settings to ask a question..." : llmEnabled === null ? "Loading AI settings..." : "Ask a question about your data..."}
         rows={1}
-        disabled={loading}
+        disabled={loading || chatDisabled}
         aria-describedby="composer-hint"
       />
       <div className="composer-bottom">
