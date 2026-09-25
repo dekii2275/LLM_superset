@@ -20,7 +20,7 @@ export function VisualizationPanel({ dashboardId, dashboardTitle, refreshToken =
       <div className="visualization-header">
         <div>
           <p className="panel-eyebrow">LIVE VISUALIZATION</p>
-          <h2>{dashboardTitle ?? "NYC Yellow Taxi Overview"}</h2>
+          <h2>{dashboardTitle ?? "NYC Taxi Trips Analysis"}</h2>
           <p className="visualization-subtitle">Live data from the connected PostgreSQL dataset</p>
         </div>
         <button className="icon-button panel-menu-button" type="button" aria-label="Visualization options" title="Visualization options">

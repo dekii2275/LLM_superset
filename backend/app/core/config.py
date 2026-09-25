@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     superset_mcp_internal_url: str = "http://superset-mcp:5008/mcp"
     superset_admin_username: str | None = None
     superset_admin_password: str | None = None
-    superset_dashboard_slug: str = "nyc-yellow-taxi-overview"
+    superset_dashboard_slug: str = "nyc-taxi-trips-analysis"
     superset_taxi_dataset_id: int = 1
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3.6-flash"

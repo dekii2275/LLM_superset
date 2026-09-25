@@ -123,6 +123,35 @@ for the current PostgreSQL archive format.
    python superset/scripts/setup_nyc_taxi_demo.py
    ```
 
+   To create the Power BI-style dashboard from the reference images, run the
+   reusable setup script. It keeps seven shared KPI cards above the **Trips &
+   Revenue** and **Trip Patterns** tabs, with Vendor Name and Day Of Week
+   filters in a vertical panel at the left. Tabs appear before the charts, and
+   each tab starts with the same KPI row. The second tab includes six charts for
+   weekday trips, time-of-day trips, pickup/dropoff boroughs, average daily
+   trips by weekday, and daily trends split into time-of-day groups. The time
+   groups are Early Morning (05:00–06:59), Morning (07:00–11:59), Afternoon
+   (12:00–16:59), Evening (17:00–20:59), and Night (all other hours).
+
+   The script uses the source data's two latest years by default (or the years
+   available in the dataset if fewer than two are present):
+
+   ```powershell
+   python superset/scripts/setup_nyc_taxi_analytics.py --env-file .env.local
+   ```
+
+   For another Superset instance, point the same script to it and choose that
+   environment's credentials file:
+
+   ```powershell
+   python superset/scripts/setup_nyc_taxi_analytics.py --base-url https://superset.example.com --env-file .env.prod --years 2017,2018
+   ```
+
+The script is safe to re-run: it updates only its own virtual dataset,
+charts, and dashboard named **NYC Taxi Trips Analysis**, then enables embedding
+for the configured `FRONTEND_URL` / `FRONTEND_ORIGINS`. It also applies the
+branded background from `superset/assets/superset-dashboard-background.png`.
+
 Local URLs:
 
 | Service | URL |

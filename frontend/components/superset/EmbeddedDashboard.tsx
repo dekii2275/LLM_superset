@@ -47,9 +47,9 @@ export function EmbeddedDashboard({ onClose, dashboardId, title }: EmbeddedDashb
           },
           dashboardUiConfig: {
             hideTitle: true,
-            hideTab: true,
+            hideTab: false,
             hideChartControls: true,
-            filters: { expanded: false },
+            filters: { expanded: true },
           },
         });
       } catch (embedError) {
@@ -76,7 +76,7 @@ export function EmbeddedDashboard({ onClose, dashboardId, title }: EmbeddedDashb
       <div className="superset-embed-header">
         <div>
           <p className="panel-eyebrow">LIVE DASHBOARD</p>
-          <h2>{title ?? "NYC Yellow Taxi Overview"}</h2>
+          <h2>{title ?? "NYC Taxi Trips Analysis"}</h2>
         </div>
         <button type="button" className="superset-close" onClick={onClose}>Back to analysis</button>
       </div>
