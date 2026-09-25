@@ -28,6 +28,7 @@ jobs:
         env:
           DATABASE_URL: postgresql+psycopg://user:password@localhost:5432/ai_bi
           GEMINI_API_KEY: ci-placeholder-key
+          PYTHONPATH: backend
         run: python -m unittest discover -s backend/tests -v
 
       - uses: actions/setup-node@v7
