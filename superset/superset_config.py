@@ -43,14 +43,21 @@ MCP_SERVICE_PORT = 5008
 # lets the explicit CSP `frame-ancestors` allow-list control embedding.
 from superset.config import TALISMAN_CONFIG as DEFAULT_TALISMAN_CONFIG
 
-frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:43117").rstrip("/")
+frontend_origins = [
+    origin.strip().rstrip("/")
+    for origin in os.environ.get(
+        "SUPERSET_EMBEDDED_ALLOWED_ORIGINS",
+        "http://localhost:43117,http://127.0.0.1:43117",
+    ).split(",")
+    if origin.strip()
+]
 
 TALISMAN_CONFIG = {
     **DEFAULT_TALISMAN_CONFIG,
     "frame_options": None,
     "content_security_policy": {
         **DEFAULT_TALISMAN_CONFIG["content_security_policy"],
-        "frame-ancestors": [frontend_url],
+        "frame-ancestors": frontend_origins,
     },
 }
 

@@ -6,12 +6,16 @@ from app.schemas.ai import (
     AIChatContext,
     AIIntent,
     ActionExecutionRequest,
+    ChartPlan,
     EditChartOperation,
     EditChartPlan,
     EditDashboardOperation,
     EditDashboardPlan,
     IntentResult,
+    QueryResult,
+    SQLGenerationResult,
     UpdateChartResult,
+    VisualizationSpec,
 )
 from app.services.ai_bi_service import AIBIService
 from app.services.superset_write_service import SupersetWriteService
@@ -40,6 +44,55 @@ class EditPreviewTests(unittest.IsolatedAsyncioTestCase):
         response = await service.chat("Change this chart to a scatter plot", AIChatContext(active_chart_id=12))
         self.assertIsNone(response.pending_action)
         self.assertIn("bar", response.answer)
+
+    async def test_add_new_dashboard_chart_returns_chart_preview_before_confirmation(self):
+        class DashboardGemini:
+            async def classify_intent(self, message):
+                return IntentResult(intent=AIIntent.EDIT_DASHBOARD, user_goal=message)
+
+            async def generate_edit_dashboard_plan(self, message):
+                return EditDashboardPlan(
+                    operation=EditDashboardOperation.ADD_CHART,
+                    dashboard_name="NYC Yellow Taxi Overview",
+                    create_chart_plan=ChartPlan(
+                        title="Top Pickup Zones",
+                        chart_type="bar",
+                        question="Top pickup zones by trip count",
+                        dimension="zone",
+                        metric="trip_count",
+                    ),
+                )
+
+            async def generate_sql(self, question):
+                return SQLGenerationResult(
+                    intent="data_query",
+                    sql="SELECT 'A' AS zone, 12 AS trip_count UNION ALL SELECT 'B', 8",
+                )
+
+            async def generate_answer_from_result(self, question, result):
+                return "Preview data ready."
+
+            async def generate_visualization(self, question, result):
+                return VisualizationSpec(type="bar", x_axis="zone", y_axis="trip_count")
+
+        class PreviewQueryService:
+            async def execute_query(self, sql):
+                return QueryResult(
+                    sql=sql,
+                    columns=["zone", "trip_count"],
+                    rows=[{"zone": "A", "trip_count": 12}, {"zone": "B", "trip_count": 8}],
+                    row_count=2,
+                )
+
+            def prepare_sql(self, sql):
+                return sql
+
+        response = await AIBIService(object(), DashboardGemini(), PreviewQueryService()).chat(
+            "Add top pickup zones to the dashboard"
+        )
+        self.assertEqual(response.pending_action.action, "EDIT_DASHBOARD")
+        self.assertEqual(response.query.rows[0]["zone"], "A")
+        self.assertEqual(response.visualization.title, "Top Pickup Zones")
 
 
 class EditExecutionBoundaryTests(unittest.IsolatedAsyncioTestCase):

@@ -95,6 +95,26 @@ async def ai_chat(request: AIChatRequest) -> AIChatResponse:
         ) from error
 
 
+def _prepared_chart_from_preview(chart_plan, query, visualization):
+    """Revalidate a reviewed browser preview before writing a new chart."""
+    if not query or not visualization:
+        raise RuntimeError("A chart preview is required.")
+    if query.error or not query.rows:
+        raise RuntimeError("The chart preview has no usable query data.")
+    query_service = QueryService(
+        default_limit=settings.default_query_limit,
+        max_limit=settings.max_query_limit,
+        timeout_seconds=settings.ai_query_timeout_seconds,
+    )
+    safe_sql = query_service.prepare_sql(query.sql or "")
+    validated_visualization = VisualizationService().validate(visualization, query)
+    if validated_visualization.type == "none":
+        raise RuntimeError("The chart preview visualization is invalid.")
+    if validated_visualization.type != chart_plan.chart_type:
+        raise RuntimeError("The chart preview type does not match the requested chart.")
+    return chart_plan, safe_sql, validated_visualization
+
+
 @router.post("/actions/execute", response_model=ActionExecutionResponse)
 async def execute_action(request: ActionExecutionRequest) -> ActionExecutionResponse:
     """Confirmation-only write boundary. `/chat` remains read-only."""
@@ -122,13 +142,12 @@ async def execute_action(request: ActionExecutionRequest) -> ActionExecutionResp
         plan = request.edit_dashboard_plan
         prepared_new_chart = None
         if plan.operation == EditDashboardOperation.ADD_CHART and plan.create_chart_plan:
-            planner = AIBIService(
-                mcp_service(),
-                GeminiService(settings.gemini_api_key or "", settings.gemini_model, answer_max_rows=settings.ai_answer_max_rows),
-                QueryService(default_limit=settings.default_query_limit, max_limit=settings.max_query_limit, timeout_seconds=settings.ai_query_timeout_seconds),
-            )
             try:
-                prepared_new_chart = await planner.prepare_chart_for_write(plan.create_chart_plan)
+                prepared_new_chart = _prepared_chart_from_preview(
+                    plan.create_chart_plan,
+                    request.query,
+                    request.visualization,
+                )
             except (RuntimeError, SQLValidationError) as error:
                 logger.warning("dashboard_add_chart_prepare_failed dashboard_id=%s error=%s", plan.dashboard_id, error)
                 return ActionExecutionResponse(success=False, action=AIIntent.EDIT_DASHBOARD, message="Không thể chuẩn bị biểu đồ mới cho dashboard.", error=str(error))

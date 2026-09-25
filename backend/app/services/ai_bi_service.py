@@ -154,9 +154,29 @@ class AIBIService:
         except Exception:
             logger.exception("edit_dashboard_planning_failed")
             return AIChatResponse(answer="Chưa thể chuẩn bị thay đổi dashboard. Hãy thử mô tả rõ hơn.", intent=intent)
+        query: QueryResult | None = None
+        visualization: VisualizationSpec | None = None
+        # A new dashboard chart is not yet visible in Superset. Run only its
+        # read-only query now, so confirmation is based on the actual chart.
+        if plan.operation == EditDashboardOperation.ADD_CHART and plan.create_chart_plan:
+            try:
+                query, visualization = await self.prepare_chart_preview(plan.create_chart_plan)
+            except (RuntimeError, SQLValidationError) as error:
+                logger.warning(
+                    "dashboard_add_chart_preview_failed dashboard_id=%s chart=%r error=%s",
+                    plan.dashboard_id,
+                    plan.create_chart_plan.title,
+                    error,
+                )
+                return AIChatResponse(
+                    answer=f"Chưa thể tạo preview cho biểu đồ {plan.create_chart_plan.title}. {error}",
+                    intent=intent,
+                )
         return AIChatResponse(
             answer=self._edit_dashboard_answer(plan), intent=intent, edit_dashboard_plan=plan,
             pending_action=PendingEditDashboardAction(edit_dashboard_plan=plan),
+            query=query,
+            visualization=visualization,
         )
 
     async def _resolve_edit_chart_target(self, plan: EditChartPlan) -> EditChartPlan:
@@ -308,7 +328,14 @@ class AIBIService:
     async def prepare_chart_for_write(
         self, chart_plan: ChartPlan
     ) -> tuple[ChartPlan, str, VisualizationSpec]:
-        """Shared Task 4 preparation used by dashboard add-new-chart as well."""
+        """Return normalized SQL/configuration for the write boundary."""
+        query, visualization = await self.prepare_chart_preview(chart_plan)
+        return chart_plan, self.query_service.prepare_sql(query.sql or ""), visualization
+
+    async def prepare_chart_preview(
+        self, chart_plan: ChartPlan
+    ) -> tuple[QueryResult, VisualizationSpec]:
+        """Run the read-only half of chart creation for a user-visible preview."""
         try:
             sql_plan = await self.gemini.generate_sql(chart_plan.question)
         except Exception as error:
@@ -324,7 +351,7 @@ class AIBIService:
         visualization = self._chart_visualization(chart_plan, query, response.visualization)
         if visualization.type == "none":
             raise RuntimeError(f"The result for {chart_plan.title} cannot be charted safely.")
-        return chart_plan, self.query_service.prepare_sql(query.sql or ""), visualization
+        return query, visualization
 
     @staticmethod
     def _is_save_visualization_request(message: str) -> bool:

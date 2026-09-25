@@ -22,6 +22,7 @@ import type { VisualizationSpec } from "@/lib/types";
 type DynamicChartProps = {
   spec: VisualizationSpec;
   rows: Record<string, unknown>[];
+  eyebrow?: string;
 };
 
 const COLORS = ["#92a1ff", "#84d9c2", "#edbd79", "#d59cff", "#f08e91", "#70b7ed", "#b6d477", "#e7a0b6"];
@@ -40,7 +41,7 @@ function tickLabel(value: unknown): string {
   return text.length > 18 ? `${text.slice(0, 17)}…` : text;
 }
 
-export function DynamicChart({ spec, rows }: DynamicChartProps) {
+export function DynamicChart({ spec, rows, eyebrow }: DynamicChartProps) {
   if (
     spec.type === "none" ||
     !spec.x_axis ||
@@ -87,6 +88,7 @@ export function DynamicChart({ spec, rows }: DynamicChartProps) {
 
   return (
     <section className="dynamic-chart" aria-label={spec.title ?? "Query visualization"}>
+      {eyebrow && <p className="dynamic-chart-eyebrow">{eyebrow}</p>}
       {spec.title && <h4>{spec.title}</h4>}
       <div className="dynamic-chart-canvas">
         <ResponsiveContainer width="100%" height={290}>

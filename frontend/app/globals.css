@@ -915,6 +915,14 @@ a {
   font-weight: 600;
 }
 
+.dynamic-chart-eyebrow {
+  margin: 0 5px 4px;
+  color: #8ccbb5;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .dynamic-chart-canvas {
   width: 100%;
   min-width: 0;

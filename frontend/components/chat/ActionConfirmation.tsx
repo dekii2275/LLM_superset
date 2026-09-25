@@ -83,13 +83,18 @@ export function EditChartConfirmation({ action, onUpdated }: EditChartConfirmati
   return <section className="action-confirmation" aria-label="Chart update confirmation"><strong>Change chart?</strong><span>{plan.chart_name}</span><small>{detail}</small>{state === "error" && <p role="alert">{error}</p>}<div className="action-confirmation-buttons"><button type="button" onClick={() => setState("cancelled")} disabled={state === "executing"}>Cancel</button><button type="button" className="create-chart-button" onClick={apply} disabled={state === "executing"}>{state === "executing" ? "Updating…" : "Apply Change"}</button></div></section>;
 }
 
-type EditDashboardConfirmationProps = { action: PendingEditDashboardAction; onUpdated?: (result: CreateDashboardResult) => void };
-export function EditDashboardConfirmation({ action, onUpdated }: EditDashboardConfirmationProps) {
+type EditDashboardConfirmationProps = {
+  action: PendingEditDashboardAction;
+  query?: QueryResult | null;
+  visualization?: VisualizationSpec | null;
+  onUpdated?: (result: CreateDashboardResult) => void;
+};
+export function EditDashboardConfirmation({ action, query, visualization, onUpdated }: EditDashboardConfirmationProps) {
   const [state, setState] = useState<"idle" | "executing" | "success" | "cancelled" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const plan = action.edit_dashboard_plan;
   const detail = plan.operation === "RENAME_DASHBOARD" ? `Rename to ${plan.new_title}` : plan.operation === "REMOVE_CHART" ? `Remove ${plan.chart_name}; the saved chart will not be deleted.` : `Add ${plan.create_chart_plan?.title ?? plan.chart_name}`;
-  const apply = async () => { if (state !== "idle") return; setState("executing"); try { const response = await executeEditDashboard(plan); const dashboard = response.result; if (!response.success || !dashboard || !("dashboard_id" in dashboard) || !dashboard.dashboard_id) throw new Error(response.error ?? response.message); setState("success"); onUpdated?.(dashboard); } catch (e) { setError(e instanceof Error ? e.message : "Could not update the dashboard."); setState("error"); } };
+  const apply = async () => { if (state !== "idle") return; setState("executing"); try { const response = await executeEditDashboard(plan, query ?? undefined, visualization ?? undefined); const dashboard = response.result; if (!response.success || !dashboard || !("dashboard_id" in dashboard) || !dashboard.dashboard_id) throw new Error(response.error ?? response.message); setState("success"); onUpdated?.(dashboard); } catch (e) { setError(e instanceof Error ? e.message : "Could not update the dashboard."); setState("error"); } };
   if (state === "success") return <section className="action-confirmation is-success"><strong>✓ Dashboard updated</strong><span>{plan.dashboard_name}</span></section>;
   if (state === "cancelled") return <p className="action-cancelled">Dashboard update cancelled. No Superset changes were made.</p>;
   return <section className="action-confirmation dashboard-confirmation" aria-label="Dashboard update confirmation"><strong>Update dashboard?</strong><span>{plan.dashboard_name}</span><small>{detail}</small>{state === "error" && <p role="alert">{error}</p>}<div className="action-confirmation-buttons"><button type="button" onClick={() => setState("cancelled")} disabled={state === "executing"}>Cancel</button><button type="button" className="create-chart-button" onClick={apply} disabled={state === "executing"}>{state === "executing" ? "Updating…" : plan.operation === "REMOVE_CHART" ? "Remove" : "Apply Change"}</button></div></section>;

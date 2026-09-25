@@ -58,7 +58,11 @@ export function ChatMessage({ message, onDashboardCreated, onDashboardUpdated }:
         )}
 
         {isAssistant && message.query && !message.query.error && message.visualization && (
-          <DynamicChart spec={message.visualization} rows={message.query.rows} />
+          <DynamicChart
+            spec={message.visualization}
+            rows={message.query.rows}
+            eyebrow={message.pendingAction?.action === "EDIT_DASHBOARD" && message.pendingAction.edit_dashboard_plan.operation === "ADD_CHART" ? "Preview biểu đồ sẽ thêm vào dashboard" : undefined}
+          />
         )}
 
         {isAssistant && message.query && !message.query.error && (
@@ -82,7 +86,12 @@ export function ChatMessage({ message, onDashboardCreated, onDashboardUpdated }:
         )}
 
         {isAssistant && message.pendingAction?.action === "EDIT_DASHBOARD" && (
-          <EditDashboardConfirmation action={message.pendingAction} onUpdated={onDashboardUpdated} />
+          <EditDashboardConfirmation
+            action={message.pendingAction}
+            query={message.query}
+            visualization={message.visualization}
+            onUpdated={onDashboardUpdated}
+          />
         )}
 
         {isAssistant && message.toolCalls && message.toolCalls.length > 0 && (

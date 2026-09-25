@@ -81,18 +81,24 @@ export async function executeEditChart(plan: EditChartPlan): Promise<ActionExecu
   return executeSemanticAction("EDIT_CHART", "edit_chart_plan", plan);
 }
 
-export async function executeEditDashboard(plan: EditDashboardPlan): Promise<ActionExecutionResponse> {
-  return executeSemanticAction("EDIT_DASHBOARD", "edit_dashboard_plan", plan);
+export async function executeEditDashboard(
+  plan: EditDashboardPlan,
+  query?: QueryResult,
+  visualization?: VisualizationSpec,
+): Promise<ActionExecutionResponse> {
+  return executeSemanticAction("EDIT_DASHBOARD", "edit_dashboard_plan", plan, query, visualization);
 }
 
 async function executeSemanticAction(
   action: "EDIT_CHART" | "EDIT_DASHBOARD",
   field: "edit_chart_plan" | "edit_dashboard_plan",
   plan: EditChartPlan | EditDashboardPlan,
+  query?: QueryResult,
+  visualization?: VisualizationSpec,
 ): Promise<ActionExecutionResponse> {
   const response = await fetch(apiUrl("/api/v1/ai/actions/execute"), {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action, [field]: plan }),
+    body: JSON.stringify({ action, [field]: plan, ...(query && visualization ? { query, visualization } : {}) }),
   });
   const payload = await response.json().catch(() => null) as ActionExecutionResponse | { detail?: string } | null;
   if (!response.ok) throw new ApiError(payload && "detail" in payload ? payload.detail ?? "Could not apply this change." : "Could not apply this change.", response.status);

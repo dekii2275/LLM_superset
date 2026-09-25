@@ -13,6 +13,7 @@ x-superset-environment: &superset-environment
   SUPERSET_APP_ROOT: ${SUPERSET_APP_ROOT:-}
   ENABLE_PROXY_FIX: ${ENABLE_PROXY_FIX:-false}
   FRONTEND_URL: ${FRONTEND_URL:-http://localhost:43117}
+  SUPERSET_EMBEDDED_ALLOWED_ORIGINS: ${SUPERSET_EMBEDDED_ALLOWED_ORIGINS:-http://localhost:43117,http://127.0.0.1:43117}
   MCP_DEV_USERNAME: ${MCP_DEV_USERNAME:-admin}
 
 services:
@@ -107,7 +108,7 @@ services:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:48123}
       NEXT_PUBLIC_SUPERSET_URL: ${NEXT_PUBLIC_SUPERSET_URL:-http://localhost:58088}
     ports:
-      - "127.0.0.1:43117:3000"
+      - "127.0.0.1:43117:43117"
     volumes:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules
@@ -117,7 +118,7 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then((r) => process.exit(r.status === 200 ? 0 : 1)).catch(() => process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:43117').then((r) => process.exit(r.status === 200 ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -164,7 +165,7 @@ services:
         - CMD
         - python
         - -c
-        - "import urllib.request; response = urllib.request.urlopen('http://127.0.0.1:8088/superset/health', timeout=3); raise SystemExit(0 if response.status == 200 else 1)"
+        - "import urllib.request; response = urllib.request.urlopen('http://127.0.0.1:8088/health', timeout=3); raise SystemExit(0 if response.status == 200 else 1)"
       interval: 15s
       timeout: 5s
       retries: 20
