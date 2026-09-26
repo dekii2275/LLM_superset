@@ -10,21 +10,22 @@ type EmbedConfig = {
 };
 
 type EmbeddedDashboardProps = {
-  onClose: () => void;
+  onClose?: () => void;
   dashboardId?: number;
   title?: string;
+  variant?: "page" | "inline";
 };
 
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(apiUrl(path), { cache: "no-store" });
   if (!response.ok) {
     const detail = await response.json().catch(() => null) as { detail?: string } | null;
-    throw new Error(detail?.detail ?? "Could not connect to Superset.");
+    throw new Error(detail?.detail ?? "Không thể kết nối với Superset.");
   }
   return response.json() as Promise<T>;
 }
 
-export function EmbeddedDashboard({ onClose, dashboardId, title }: EmbeddedDashboardProps) {
+export function EmbeddedDashboard({ onClose, dashboardId, title, variant = "page" }: EmbeddedDashboardProps) {
   const mountPoint = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,7 +55,7 @@ export function EmbeddedDashboard({ onClose, dashboardId, title }: EmbeddedDashb
         });
       } catch (embedError) {
         if (!cancelled) {
-          setError(embedError instanceof Error ? embedError.message : "Could not load Superset.");
+          setError(embedError instanceof Error ? embedError.message : "Không thể tải Superset.");
         }
       }
     }
@@ -68,17 +69,17 @@ export function EmbeddedDashboard({ onClose, dashboardId, title }: EmbeddedDashb
 
   return (
     <section
-      className="superset-embed"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Embedded Superset dashboard"
+      className={`superset-embed ${variant === "inline" ? "superset-embed-inline" : ""}`}
+      role={variant === "inline" ? undefined : "dialog"}
+      aria-modal={variant === "inline" ? undefined : true}
+      aria-label="Bảng điều khiển Superset được nhúng"
     >
       <div className="superset-embed-header">
         <div>
-          <p className="panel-eyebrow">LIVE DASHBOARD</p>
-          <h2>{title ?? "NYC Taxi Trips Analysis"}</h2>
+          <p className="panel-eyebrow">BẢNG ĐIỀU KHIỂN TRỰC TIẾP</p>
+          <h2>{title ?? "Phân tích chuyến đi Taxi NYC"}</h2>
         </div>
-        <button type="button" className="superset-close" onClick={onClose}>Back to analysis</button>
+        <button type="button" className="superset-close" onClick={onClose}>Quay lại phân tích</button>
       </div>
       {error ? <p className="superset-embed-error">{error}</p> : <div ref={mountPoint} className="superset-embed-frame" />}
     </section>

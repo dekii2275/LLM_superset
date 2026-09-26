@@ -27,7 +27,7 @@ export async function getAISettings(): Promise<AISettings> {
   const response = await fetch(apiUrl("/api/v1/ai/settings"), { cache: "no-store" });
   if (!response.ok) {
     const payload = await response.json().catch(() => null) as { detail?: string } | null;
-    throw new ApiError(payload?.detail ?? "Could not load AI settings.", response.status);
+    throw new ApiError(payload?.detail ?? "Không thể tải cài đặt AI.", response.status);
   }
   return response.json() as Promise<AISettings>;
 }
@@ -40,7 +40,7 @@ export async function setAIEnabled(llmEnabled: boolean): Promise<AISettings> {
   });
   if (!response.ok) {
     const payload = await response.json().catch(() => null) as { detail?: string } | null;
-    throw new ApiError(payload?.detail ?? "Could not update AI settings.", response.status);
+    throw new ApiError(payload?.detail ?? "Không thể cập nhật cài đặt AI.", response.status);
   }
   return response.json() as Promise<AISettings>;
 }
@@ -54,7 +54,7 @@ export async function askAI(message: string, context?: AIChatContext): Promise<A
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null) as { detail?: string } | null;
-    throw new ApiError(payload?.detail ?? "The AI service could not process the request.", response.status);
+    throw new ApiError(payload?.detail ?? "Dịch vụ AI không thể xử lý yêu cầu.", response.status);
   }
 
   return response.json() as Promise<AIChatResponse>;
@@ -78,7 +78,7 @@ export async function executeCreateChart(
   const payload = await response.json().catch(() => null) as ActionExecutionResponse | { detail?: string } | null;
   if (!response.ok) {
     throw new ApiError(
-      payload && "detail" in payload ? payload.detail ?? "Could not create the chart." : "Could not create the chart.",
+      payload && "detail" in payload ? payload.detail ?? "Không thể tạo biểu đồ." : "Không thể tạo biểu đồ.",
       response.status,
     );
   }
@@ -94,7 +94,7 @@ export async function executeCreateDashboard(plan: DashboardPlan): Promise<Actio
   const payload = await response.json().catch(() => null) as ActionExecutionResponse | { detail?: string } | null;
   if (!response.ok) {
     throw new ApiError(
-      payload && "detail" in payload ? payload.detail ?? "Could not create the dashboard." : "Could not create the dashboard.",
+      payload && "detail" in payload ? payload.detail ?? "Không thể tạo bảng điều khiển." : "Không thể tạo bảng điều khiển.",
       response.status,
     );
   }
@@ -125,7 +125,7 @@ async function executeSemanticAction(
     body: JSON.stringify({ action, [field]: plan, ...(query && visualization ? { query, visualization } : {}) }),
   });
   const payload = await response.json().catch(() => null) as ActionExecutionResponse | { detail?: string } | null;
-  if (!response.ok) throw new ApiError(payload && "detail" in payload ? payload.detail ?? "Could not apply this change." : "Could not apply this change.", response.status);
+  if (!response.ok) throw new ApiError(payload && "detail" in payload ? payload.detail ?? "Không thể áp dụng thay đổi này." : "Không thể áp dụng thay đổi này.", response.status);
   return payload as ActionExecutionResponse;
 }
 

@@ -1,3 +1,4 @@
+import json
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -120,3 +121,21 @@ class DashboardLayoutTests(unittest.TestCase):
         self.assertEqual(layout["GRID_ID"]["children"], ["ROW-1", "ROW-2", "ROW-3", "ROW-4", "ROW-5"])
         self.assertEqual(layout["ROW-4"]["children"], ["CHART-7", "CHART-8"])
         self.assertEqual(layout["ROW-5"]["children"], ["CHART-9"])
+
+    def test_new_chart_is_appended_without_rebuilding_existing_layout(self):
+        existing_charts = [{"id": index, "slice_name": f"Chart {index}", "uuid": str(index)} for index in range(1, 5)]
+        layout = SupersetWriteService.build_dashboard_layout("Demo", existing_charts)
+        layout["CHART-1"]["meta"]["width"] = 7
+        dashboard = {"position_json": json.dumps(layout)}
+        service = SupersetWriteService("", "", None, None, 1)
+
+        updated = service._preserve_dashboard_layout(
+            dashboard,
+            "Demo",
+            [*existing_charts, {"id": 5, "slice_name": "Chart 5", "uuid": "5"}],
+        )
+
+        self.assertEqual(updated["GRID_ID"]["children"], ["ROW-1", "ROW-2", "ROW-AI-5"])
+        self.assertEqual(updated["CHART-1"]["meta"]["width"], 7)
+        self.assertEqual(updated["ROW-AI-5"]["children"], ["CHART-5"])
+        self.assertEqual(updated["CHART-5"]["meta"]["width"], 12)

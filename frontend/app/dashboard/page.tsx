@@ -9,7 +9,7 @@ export default function DashboardPage() {
 
   return (
     <AppLayout singleColumn>
-      <section className="route-page dashboard-route" aria-label="NYC Taxi dashboard">
+      <section className="route-page dashboard-route" aria-label="Bảng điều khiển NYC Taxi">
         <EmbeddedDashboard onClose={() => router.push("/")} />
       </section>
     </AppLayout>

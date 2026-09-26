@@ -6,7 +6,7 @@ type QueryResultDetailsProps = {
 
 function formatCell(value: unknown): string {
   if (typeof value === "number") {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("vi-VN", {
       maximumFractionDigits: Number.isInteger(value) ? 0 : 2,
     }).format(value);
   }
@@ -20,7 +20,7 @@ export function QueryResultDetails({ query }: QueryResultDetailsProps) {
     <div className="query-details">
       {canShowTable && (
         <details>
-          <summary>View data <span>{query.row_count} rows</span></summary>
+          <summary>Xem dữ liệu <span>{query.row_count} hàng</span></summary>
           <div className="query-table-scroll">
             <table>
               <thead><tr>{query.columns.map((column) => <th key={column}>{column}</th>)}</tr></thead>
@@ -35,12 +35,12 @@ export function QueryResultDetails({ query }: QueryResultDetailsProps) {
       )}
       {query.sql && (
         <details>
-          <summary>View SQL</summary>
+          <summary>Xem SQL</summary>
           <pre><code>{query.sql}</code></pre>
         </details>
       )}
       {query.execution_time_ms !== null && query.execution_time_ms !== undefined && (
-        <p className="query-duration">Query time: {query.execution_time_ms.toLocaleString()} ms</p>
+        <p className="query-duration">Thời gian truy vấn: {query.execution_time_ms.toLocaleString("vi-VN")} ms</p>
       )}
     </div>
   );

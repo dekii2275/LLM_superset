@@ -809,10 +809,11 @@ def dashboard_positions(charts: list[dict[str, Any]], years: list[int]) -> dict[
         height: int,
     ) -> None:
         widths = [width for _, width in row_charts]
-        # Keep one grid column free so rows fit beside the vertical filter sidebar.
-        while sum(widths) > 11:
-            index = max(range(len(widths)), key=lambda item: (widths[item], item))
-            widths[index] -= 1
+        # Use all 12 Superset grid columns. The embedded dashboard does not show a
+        # persistent filter sidebar, so reserving a column here only leaves an
+        # unused strip on the right and makes the last chart harder to read.
+        if sum(widths) > 12:
+            raise ValueError(f"Row {row_id} exceeds the 12-column dashboard grid.")
         chart_ids = []
         for (title, _), width in zip(row_charts, widths):
             chart = by_title[title]

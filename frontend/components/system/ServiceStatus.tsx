@@ -24,18 +24,18 @@ export function ServiceStatus() {
   }, []);
 
   return (
-    <div className="service-status" aria-label="System status">
+    <div className="service-status" aria-label="Trạng thái hệ thống">
       <div className="service-status-item" aria-live="polite">
         <span className={`status-dot ${apiState}`} />
         <span className="service-status-name">API</span>
         <span className="service-status-value">
-          {apiState === "checking" ? "Checking" : apiState === "connected" ? "Online" : "Offline"}
+          {apiState === "checking" ? "Đang kiểm tra" : apiState === "connected" ? "Trực tuyến" : "Ngoại tuyến"}
         </span>
       </div>
       <div className="service-status-item">
         <span className="status-dot connected" />
         <span className="service-status-name">Superset</span>
-        <span className="service-status-value">Online</span>
+        <span className="service-status-value">Trực tuyến</span>
       </div>
     </div>
   );

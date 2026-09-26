@@ -14,7 +14,7 @@ export default function SettingsPage() {
     void getAISettings()
       .then((settings) => { if (active) setLlmEnabled(settings.llm_enabled); })
       .catch((requestError) => {
-        if (active) setError(requestError instanceof Error ? requestError.message : "Could not load AI settings.");
+        if (active) setError(requestError instanceof Error ? requestError.message : "Không thể tải cài đặt AI.");
       });
     return () => { active = false; };
   }, []);
@@ -26,7 +26,7 @@ export default function SettingsPage() {
       const settings = await setAIEnabled(enabled);
       setLlmEnabled(settings.llm_enabled);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Could not update AI settings.");
+      setError(requestError instanceof Error ? requestError.message : "Không thể cập nhật cài đặt AI.");
     } finally {
       setSaving(false);
     }
@@ -36,33 +36,33 @@ export default function SettingsPage() {
     <AppLayout singleColumn>
       <section className="route-page">
         <header className="route-heading">
-          <p className="panel-eyebrow">PREFERENCES</p>
-          <h1>Settings</h1>
-          <p>Control whether AI chat can use the server-side API key.</p>
+          <p className="panel-eyebrow">TÙY CHỈNH</p>
+          <h1>Cài đặt</h1>
+          <p>Kiểm soát việc trò chuyện AI có thể sử dụng khóa API trên máy chủ hay không.</p>
         </header>
         <section className="settings-card" aria-labelledby="ai-settings-title">
           <div className="settings-card-heading">
             <div className="settings-card-icon">AI</div>
             <div>
-              <h2 id="ai-settings-title">AI chat</h2>
-              <p>Turn this off to prevent questions from being sent to the LLM.</p>
+              <h2 id="ai-settings-title">Trò chuyện AI</h2>
+              <p>Tắt tùy chọn này để ngăn câu hỏi được gửi đến mô hình ngôn ngữ.</p>
             </div>
           </div>
           <label className="ai-setting-row settings-toggle-row">
             <span>
-              <b>Enable AI chat</b>
-              <small>The API key stays on the server and is never shown here.</small>
+              <b>Bật trò chuyện AI</b>
+              <small>Khóa API luôn nằm trên máy chủ và không hiển thị tại đây.</small>
             </span>
             <input
               type="checkbox"
               checked={llmEnabled === true}
               disabled={llmEnabled === null || saving}
               onChange={(event) => { void updateLlmSetting(event.target.checked); }}
-              aria-label="Enable AI chat"
+              aria-label="Bật trò chuyện AI"
             />
           </label>
           <p className="settings-status" role="status" aria-live="polite">
-            {error ?? (saving ? "Saving…" : llmEnabled === null ? "Loading settings…" : llmEnabled ? "AI chat is on" : "AI chat is off")}
+            {error ?? (saving ? "Đang lưu…" : llmEnabled === null ? "Đang tải cài đặt…" : llmEnabled ? "Đã bật trò chuyện AI" : "Đã tắt trò chuyện AI")}
           </p>
         </section>
       </section>

@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import type { ChatMessage as ChatMessageType, CreateDashboardResult } from "@/lib/types";
 import { ChatInput } from "./ChatInput";
 import { ChatMessage } from "./ChatMessage";
-import { EmptyChat } from "./EmptyChat";
+import { EmbeddedDashboard } from "@/components/superset/EmbeddedDashboard";
 
 type ChatPanelProps = {
   title: string;
@@ -29,7 +29,7 @@ export function ChatPanel({
   onSend,
   onDashboardCreated,
   onDashboardUpdated,
-  loadingLabel = "Analyzing your data…",
+  loadingLabel = "Đang phân tích dữ liệu…",
 }: ChatPanelProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -38,20 +38,12 @@ export function ChatPanel({
   }, [messages, loading]);
 
   return (
-    <section className="chat-panel" aria-label="Conversation">
-      <div className="chat-toolbar">
-        <div className="thread-context">
-          <span className="thread-icon">✦</span>
-          <div>
-            <strong>{title}</strong>
-            <span>Natural language analysis</span>
-          </div>
-        </div>
-      </div>
-
+    <section className="chat-panel" aria-label="Cuộc trò chuyện">
       <div className={`chat-scroll-region ${messages.length === 0 ? "is-empty" : ""}`}>
         {messages.length === 0 ? (
-          <EmptyChat onAsk={onSend} disabled={llmEnabled !== true} />
+          <div className="chat-dashboard">
+            <EmbeddedDashboard variant="inline" />
+          </div>
         ) : (
           <div className="message-list" aria-live="polite">
             {messages.map((message) => (

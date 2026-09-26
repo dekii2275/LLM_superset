@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AI BI Assistant · Analytics Workspace",
-  description: "Conversational Analytics powered by Superset",
+  title: "AI BI Assistant · Không gian làm việc phân tích",
+  description: "Phân tích hội thoại trên nền tảng Superset",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
