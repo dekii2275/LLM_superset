@@ -7,13 +7,13 @@ import { ApiError, askAI, getAISettings } from "@/lib/api";
 import type { ChatMessage, CreateDashboardResult } from "@/lib/types";
 
 export default function Home() {
-  const [conversationTitle, setConversationTitle] = useState("New Analysis");
+  const [conversationTitle, setConversationTitle] = useState("Phân tích mới");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [embeddedDashboard, setEmbeddedDashboard] = useState<CreateDashboardResult | null>(null);
-  const [loadingLabel, setLoadingLabel] = useState("Analyzing your data…");
+  const [loadingLabel, setLoadingLabel] = useState("Đang phân tích dữ liệu…");
   const [llmEnabled, setLlmEnabled] = useState<boolean | null>(null);
   const loadingRef = useRef(false);
   const requestIdRef = useRef(0);
@@ -28,7 +28,7 @@ export default function Home() {
 
   const handleNewAnalysis = useCallback(() => {
     requestIdRef.current += 1;
-    setConversationTitle("New Analysis");
+    setConversationTitle("Phân tích mới");
     setMessages([]);
     setInput("");
     setError(null);
@@ -51,7 +51,7 @@ export default function Home() {
   const handleSend = async (question: string) => {
     const trimmed = question.trim();
     if (llmEnabled !== true) {
-      setError("Bật AI chat trong Settings trước khi gửi câu hỏi.");
+      setError("Hãy bật trò chuyện AI trong Cài đặt trước khi gửi câu hỏi.");
       return;
     }
     if (!trimmed || loadingRef.current) return;
@@ -62,8 +62,8 @@ export default function Home() {
     setInput("");
     setError(null);
     const lowered = trimmed.toLowerCase();
-    setLoadingLabel(lowered.includes("dashboard") && /(create|tạo)/.test(lowered) ? "Preparing dashboard…" : lowered.includes("dashboard") ? "Preparing dashboard update…" : /(create|tạo|save|lưu).*?(chart|biểu đồ)/.test(lowered) ? "Preparing chart…" : /(change|rename|edit|đổi|sửa).*?(chart|biểu đồ)/.test(lowered) ? "Preparing chart update…" : "Analyzing your data…");
-    setConversationTitle((current) => current === "New Analysis" ? trimmed.slice(0, 34) : current);
+    setLoadingLabel(lowered.includes("dashboard") && /(create|tạo)/.test(lowered) ? "Đang chuẩn bị bảng điều khiển…" : lowered.includes("dashboard") ? "Đang chuẩn bị cập nhật bảng điều khiển…" : /(create|tạo|save|lưu).*?(chart|biểu đồ)/.test(lowered) ? "Đang chuẩn bị biểu đồ…" : /(change|rename|edit|đổi|sửa).*?(chart|biểu đồ)/.test(lowered) ? "Đang chuẩn bị cập nhật biểu đồ…" : "Đang phân tích dữ liệu…");
+    setConversationTitle((current) => current === "Phân tích mới" ? trimmed.slice(0, 34) : current);
 
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
@@ -99,7 +99,7 @@ export default function Home() {
       setMessages((current) => [...current, assistantMessage]);
     } catch (requestError) {
       if (requestId === requestIdRef.current) {
-        setError(requestError instanceof ApiError ? requestError.message : "Could not reach the AI service. Please try again.");
+        setError(requestError instanceof ApiError ? requestError.message : "Không thể kết nối với dịch vụ AI. Vui lòng thử lại.");
       }
     } finally {
       if (requestId === requestIdRef.current) {

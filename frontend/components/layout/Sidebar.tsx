@@ -9,41 +9,41 @@ type SidebarProps = {
 };
 
 const navigation = [
-  { href: "/", label: "Home", icon: "sparkle" as const },
-  { href: "/dashboard", label: "Dashboard", icon: "chart" as const },
-  { href: "/profile", label: "Profile", icon: "user" as const },
-  { href: "/settings", label: "Settings", icon: "settings" as const },
+  { href: "/", label: "Trang chủ", icon: "sparkle" as const },
+  { href: "/dashboard", label: "Bảng điều khiển", icon: "chart" as const },
+  { href: "/profile", label: "Hồ sơ", icon: "user" as const },
+  { href: "/settings", label: "Cài đặt", icon: "settings" as const },
 ];
 
 export function Sidebar({ onNewAnalysis }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className="sidebar" id="app-sidebar" aria-label="Workspace navigation">
+    <aside className="sidebar" id="app-sidebar" aria-label="Điều hướng không gian làm việc">
       <div className="sidebar-topline">
-        <span className="workspace-label">WORKSPACE</span>
-        <span className="workspace-switcher" aria-label="Personal workspace">P</span>
+        <span className="workspace-label">KHÔNG GIAN LÀM VIỆC</span>
+        <span className="workspace-switcher" aria-label="Không gian làm việc cá nhân">P</span>
       </div>
 
       {onNewAnalysis ? (
         <button className="new-analysis-button" type="button" onClick={onNewAnalysis}>
           <Icon name="plus" size={17} />
-          <span>New Analysis</span>
+          <span>Phân tích mới</span>
           <kbd>⌘ K</kbd>
         </button>
       ) : (
         <Link className="new-analysis-button" href="/">
           <Icon name="plus" size={17} />
-          <span>New Analysis</span>
+          <span>Phân tích mới</span>
           <kbd>⌘ K</kbd>
         </Link>
       )}
 
       <div className="sidebar-section-heading">
-        <span>PAGES</span>
+        <span>TRANG</span>
       </div>
 
-      <nav className="conversation-nav" aria-label="Pages">
+      <nav className="conversation-nav" aria-label="Các trang">
         {navigation.map(({ href, label, icon }) => {
           const active = pathname === href;
           return (
@@ -59,20 +59,20 @@ export function Sidebar({ onNewAnalysis }: SidebarProps) {
         <div className="source-heading">
           <span className="source-icon"><Icon name="database" size={16} /></span>
           <div>
-            <span className="source-kicker">DATA SOURCE</span>
-            <strong>NYC Yellow Taxi</strong>
+            <span className="source-kicker">NGUỒN DỮ LIỆU</span>
+            <strong>Taxi Vàng NYC</strong>
           </div>
           <span className="source-menu" aria-hidden="true">•••</span>
         </div>
         <div className="source-status">
           <span className="status-dot connected" />
-          <span>Connected</span>
+          <span>Đã kết nối</span>
         </div>
-        <Link className="sidebar-profile" href="/profile" aria-label="View Analytics Team profile">
+        <Link className="sidebar-profile" href="/profile" aria-label="Xem hồ sơ Nhóm Phân tích">
           <span className="profile-avatar">AN</span>
           <div>
-            <strong>Analytics Team</strong>
-            <span>Analytics workspace</span>
+            <strong>Nhóm Phân tích</strong>
+            <span>Không gian làm việc phân tích</span>
           </div>
           <span className="profile-menu" aria-hidden="true">•••</span>
         </Link>

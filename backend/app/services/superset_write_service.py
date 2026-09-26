@@ -623,9 +623,121 @@ class SupersetWriteService:
         return client.request("GET", f"/api/v1/dashboard/{dashboard_id}/charts").get("result", [])
 
     def _update_dashboard_layout(self, client: SupersetClient, dashboard: dict[str, Any], title: str, charts: list[dict[str, Any]]) -> None:
-        layout = self.build_dashboard_layout(title, charts)
+        layout = self._preserve_dashboard_layout(dashboard, title, charts)
         metadata = self._json_object(dashboard.get("json_metadata")); metadata["positions"] = layout
         client.request("PUT", f"/api/v1/dashboard/{dashboard['id']}", {"dashboard_title": title, "slug": dashboard.get("slug") or self._slug(title), "published": bool(dashboard.get("published", True)), "position_json": json.dumps(layout, ensure_ascii=False), "json_metadata": json.dumps(metadata, ensure_ascii=False)})
+
+    def _preserve_dashboard_layout(
+        self, dashboard: dict[str, Any], title: str, charts: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Keep the native layout and append newly attached charts at its end."""
+        try:
+            layout = self._json_object(dashboard.get("position_json"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return self.build_dashboard_layout(title, charts)
+
+        grid_id = next(
+            (
+                key
+                for key, node in layout.items()
+                if isinstance(node, dict) and node.get("type") == "GRID"
+            ),
+            None,
+        )
+        if grid_id is None or not isinstance(layout.get(grid_id, {}).get("children"), list):
+            return self.build_dashboard_layout(title, charts)
+
+        for node in layout.values():
+            if isinstance(node, dict) and node.get("type") == "HEADER":
+                node.setdefault("meta", {})["text"] = title
+
+        chart_by_id = {int(chart["id"]): chart for chart in charts}
+        removed_node_ids = [
+            key
+            for key, node in layout.items()
+            if isinstance(node, dict)
+            and node.get("type") == "CHART"
+            and self._chart_id_from_position(node) not in chart_by_id
+        ]
+        self._remove_layout_nodes(layout, removed_node_ids)
+
+        positioned_chart_ids = self._layout_chart_ids(layout)
+        for chart in charts:
+            chart_id = int(chart["id"])
+            if chart_id not in positioned_chart_ids:
+                self._append_chart_at_end(layout, grid_id, chart)
+
+        return layout
+
+    @staticmethod
+    def _chart_id_from_position(node: dict[str, Any]) -> int | None:
+        try:
+            return int((node.get("meta") or {}).get("chartId"))
+        except (TypeError, ValueError):
+            return None
+
+    def _layout_chart_ids(self, layout: dict[str, Any]) -> set[int]:
+        return {
+            chart_id
+            for node in layout.values()
+            if isinstance(node, dict) and node.get("type") == "CHART"
+            for chart_id in [self._chart_id_from_position(node)]
+            if chart_id is not None
+        }
+
+    @staticmethod
+    def _remove_layout_nodes(layout: dict[str, Any], node_ids: list[str]) -> None:
+        if not node_ids:
+            return
+        removed = set(node_ids)
+        for node in layout.values():
+            if isinstance(node, dict) and isinstance(node.get("children"), list):
+                node["children"] = [child for child in node["children"] if child not in removed]
+        for node_id in node_ids:
+            layout.pop(node_id, None)
+
+        empty_rows = [
+            key
+            for key, node in layout.items()
+            if isinstance(node, dict) and node.get("type") == "ROW" and not node.get("children")
+        ]
+        if empty_rows:
+            SupersetWriteService._remove_layout_nodes(layout, empty_rows)
+
+    @staticmethod
+    def _next_position_id(layout: dict[str, Any], base: str) -> str:
+        if base not in layout:
+            return base
+        suffix = 2
+        while f"{base}-{suffix}" in layout:
+            suffix += 1
+        return f"{base}-{suffix}"
+
+    def _append_chart_at_end(self, layout: dict[str, Any], grid_id: str, chart: dict[str, Any]) -> None:
+        chart_id = int(chart["id"])
+        row_id = self._next_position_id(layout, f"ROW-AI-{chart_id}")
+        chart_key = self._next_position_id(layout, f"CHART-{chart_id}")
+        layout[chart_key] = {
+            "id": chart_key,
+            "type": "CHART",
+            "children": [],
+            "parents": ["ROOT_ID", grid_id, row_id],
+            "meta": {
+                "chartId": chart_id,
+                "sliceName": chart["slice_name"],
+                "uuid": chart.get("uuid"),
+                "width": 12,
+                "height": 50,
+            },
+        }
+        layout[row_id] = {
+            "id": row_id,
+            "type": "ROW",
+            "meta": {"background": "BACKGROUND_TRANSPARENT"},
+            "children": [chart_key],
+            "parents": ["ROOT_ID", grid_id],
+        }
+        layout[grid_id]["children"].append(row_id)
 
     def _unique_title(self, client: SupersetClient, requested: str) -> str:
         existing = {

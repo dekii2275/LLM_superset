@@ -29,7 +29,7 @@ const COLORS = ["#0E4A86", "#0072CE", "#D9232D", "#64748B", "#36A4E8", "#15803D"
 
 function formatValue(value: unknown): string {
   if (typeof value === "number") {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("vi-VN", {
       maximumFractionDigits: Number.isInteger(value) ? 0 : 2,
     }).format(value);
   }
@@ -87,7 +87,7 @@ export function DynamicChart({ spec, rows, eyebrow }: DynamicChartProps) {
   </>;
 
   return (
-    <section className="dynamic-chart" aria-label={spec.title ?? "Query visualization"}>
+    <section className="dynamic-chart" aria-label={spec.title ?? "Trực quan hóa truy vấn"}>
       {eyebrow && <p className="dynamic-chart-eyebrow">{eyebrow}</p>}
       {spec.title && <h4>{spec.title}</h4>}
       <div className="dynamic-chart-canvas">

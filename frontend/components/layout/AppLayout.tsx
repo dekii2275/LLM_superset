@@ -25,7 +25,7 @@ export function AppLayout({ children, onNewAnalysis, singleColumn = false }: App
           <button
             className="mobile-sidebar-scrim"
             type="button"
-            aria-label="Close navigation"
+            aria-label="Đóng điều hướng"
             onClick={() => setSidebarOpen(false)}
           />
         )}
