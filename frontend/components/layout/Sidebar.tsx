@@ -56,18 +56,6 @@ export function Sidebar({ onNewAnalysis }: SidebarProps) {
       </nav>
 
       <div className="sidebar-bottom">
-        <div className="source-heading">
-          <span className="source-icon"><Icon name="database" size={16} /></span>
-          <div>
-            <span className="source-kicker">NGUỒN DỮ LIỆU</span>
-            <strong>Taxi Vàng NYC</strong>
-          </div>
-          <span className="source-menu" aria-hidden="true">•••</span>
-        </div>
-        <div className="source-status">
-          <span className="status-dot connected" />
-          <span>Đã kết nối</span>
-        </div>
         <Link className="sidebar-profile" href="/profile" aria-label="Xem hồ sơ Nhóm Phân tích">
           <span className="profile-avatar">AN</span>
           <div>

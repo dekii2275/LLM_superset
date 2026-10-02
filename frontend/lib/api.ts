@@ -128,14 +128,3 @@ async function executeSemanticAction(
   if (!response.ok) throw new ApiError(payload && "detail" in payload ? payload.detail ?? "Không thể áp dụng thay đổi này." : "Không thể áp dụng thay đổi này.", response.status);
   return payload as ActionExecutionResponse;
 }
-
-export async function checkEndpoint(url: string): Promise<boolean> {
-  if (!url) return false;
-
-  try {
-    const response = await fetch(url, { cache: "no-store" });
-    return response.ok;
-  } catch {
-    return false;
-  }
-}

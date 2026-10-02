@@ -1,7 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
-import { ServiceStatus } from "@/components/system/ServiceStatus";
 
 type AppHeaderProps = {
   sidebarOpen: boolean;
@@ -23,24 +22,8 @@ export function AppHeader({ sidebarOpen, onToggleSidebar }: AppHeaderProps) {
       </button>
 
       <Link className="brand" href="/" aria-label="Trang chủ AI BI Assistant">
-        <Image
-          className="brand-logo"
-          src="/branding/ai-bi-logo.png"
-          alt="AI BI — Artificial Intelligence + Business Intelligence"
-          width={2129}
-          height={739}
-          preload
-        />
-        <span className="brand-copy">
-          <strong>AI BI Assistant</strong>
-          <small>Phân tích hội thoại trên nền tảng Superset</small>
-        </span>
+        <Image className="brand-logo" src="/superset-logo.png" alt="Apache Superset" width={110} height={64} loading="eager" />
       </Link>
-
-      <div className="header-actions">
-        <Link className="settings-button" href="/settings">Cài đặt</Link>
-        <ServiceStatus />
-      </div>
     </header>
   );
 }
