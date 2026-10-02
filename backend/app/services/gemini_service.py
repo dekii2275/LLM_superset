@@ -8,6 +8,7 @@ from google import genai
 from google.genai import types
 
 from app.schemas.ai import (
+    ChartExplanation,
     ChartPlan,
     DashboardPlan,
     EditChartPlan,
@@ -351,3 +352,46 @@ Row count: {result.row_count}
         if isinstance(parsed, dict):
             return schema.model_validate(parsed)
         return schema.model_validate_json(response.text or "")
+
+    async def generate_chart_explanation(
+        self,
+        chart_title: str,
+        viz_type: str,
+        computed_summary: str,
+        computed_highlights: list[str],
+        computed_note: str,
+        sample_data: list[dict[str, Any]],
+    ) -> ChartExplanation:
+        prompt = f"""You are a senior Business Intelligence (BI) expert and data strategist.
+Given verified statistical calculations and sample records from an analytics database query, produce a professional, insightful executive explanation of the chart in Vietnamese (tiếng Việt).
+
+Chart Title: {chart_title}
+Visualization Type: {viz_type}
+Base Statistical Summary: {computed_summary}
+Base Key Metrics & Extremes: {computed_highlights}
+Scope Note: {computed_note}
+Sample Records: {sample_data[:10]}
+
+Instructions:
+1. Ground all numbers and observations strictly in the provided facts and data. Do NOT hallucinate unobserved metrics or external causes (e.g. weather, traffic incidents) unless present in the data.
+2. `summary`: Write 1-2 fluent, insightful sentences summarizing the overarching business story, distribution, or performance pattern.
+3. `highlights`: Provide 2-4 compelling bullet points highlighting key business observations (e.g. market dominance, concentration of trips, disparities between groups, peak periods, or notable momentum). Include concrete numbers from the provided facts.
+4. `note`: State the data coverage and limitations clearly.
+5. Return JSON conforming to the ChartExplanation schema."""
+
+        response = await self.client.aio.models.generate_content(
+            model=self.model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.2,
+                response_mime_type="application/json",
+                response_schema=ChartExplanation,
+            ),
+        )
+        parsed = getattr(response, "parsed", None)
+        if isinstance(parsed, ChartExplanation):
+            return parsed
+        if isinstance(parsed, dict):
+            return ChartExplanation.model_validate(parsed)
+        return ChartExplanation.model_validate_json(response.text or "")
+

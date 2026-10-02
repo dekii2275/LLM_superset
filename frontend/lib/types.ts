@@ -142,6 +142,12 @@ export type QueryResult = {
   error?: string | null;
 };
 
+export type ChartExplanation = {
+  summary: string;
+  highlights: string[];
+  note: string;
+};
+
 export type ChatMessage = {
   id: string;
   role: MessageRole;
@@ -168,3 +174,20 @@ export type AIChatResponse = {
   query?: QueryResult | null;
   visualization?: VisualizationSpec | null;
 };
+
+export type SupersetChartItem = {
+  id: number;
+  slice_name: string;
+  viz_type: "bar" | "line" | "pie" | "area" | "kpi" | string;
+  raw_viz_type?: string;
+  description?: string;
+};
+
+export type SupersetChartExplanationResponse = {
+  chart_id: number;
+  chart_name: string;
+  viz_type: string;
+  sql?: string | null;
+  explanation: ChartExplanation;
+};
+
