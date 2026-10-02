@@ -10,10 +10,16 @@ from app.schemas.ai import (
     AIIntent,
     ActionExecutionRequest,
     ActionExecutionResponse,
+    ChartExplanation,
+    ExplainChartRequest,
     EditDashboardOperation,
 )
 from app.services.ai_bi_service import AIBIService
 from app.services.ai_settings import is_llm_enabled, set_llm_enabled
+from app.services.chart_explanation_service import (
+    ChartExplanationService,
+    ChartExplanationValidationError,
+)
 from app.services.gemini_service import GeminiService
 from app.services.mcp_service import MCPToolError, MCPUnavailableError, SupersetMCPService
 from app.services.query_service import QueryService, SQLValidationError
@@ -111,6 +117,40 @@ async def ai_chat(request: AIChatRequest) -> AIChatResponse:
             status_code=502,
             detail="Gemini request failed; verify GEMINI_MODEL and API access",
         ) from error
+
+
+@router.post("/explain-chart", response_model=ChartExplanation)
+async def explain_chart(request: ExplainChartRequest) -> ChartExplanation:
+    """Re-run a chart's SQL under the read-only policy and explain its result."""
+    query_service = QueryService(
+        default_limit=settings.default_query_limit,
+        max_limit=settings.max_query_limit,
+        timeout_seconds=settings.ai_query_timeout_seconds,
+    )
+    try:
+        result = await query_service.execute_query(request.sql)
+    except SQLValidationError as error:
+        raise HTTPException(status_code=400, detail="SQL của biểu đồ không hợp lệ hoặc không được phép.") from error
+
+    if result.error:
+        logger.warning("chart_explanation_query_failed error_type=%s", type(result.error).__name__)
+        raise HTTPException(status_code=422, detail="Không thể chạy lại truy vấn của biểu đồ.")
+
+    try:
+        service = ChartExplanationService()
+        base_explanation = service.analyze(result, request.visualization)
+        gemini = GeminiService(settings.gemini_api_key, settings.gemini_model) if settings.gemini_api_key else None
+        if gemini:
+            return await service.explain_with_gemini(
+                base_explanation=base_explanation,
+                chart_title=request.visualization.title or "Biểu đồ",
+                viz_type=request.visualization.type,
+                sample_rows=result.rows[:10],
+                gemini=gemini,
+            )
+        return base_explanation
+    except ChartExplanationValidationError as error:
+        raise HTTPException(status_code=422, detail="Thông tin biểu đồ không khớp với kết quả truy vấn.") from error
 
 
 def _prepared_chart_from_preview(chart_plan, query, visualization):

@@ -2,11 +2,14 @@ import type {
   AIChatContext,
   AIChatResponse,
   ActionExecutionResponse,
+  ChartExplanation,
   ChartPlan,
   DashboardPlan,
   EditChartPlan,
   EditDashboardPlan,
   QueryResult,
+  SupersetChartExplanationResponse,
+  SupersetChartItem,
   VisualizationSpec,
 } from "./types";
 
@@ -58,6 +61,25 @@ export async function askAI(message: string, context?: AIChatContext): Promise<A
   }
 
   return response.json() as Promise<AIChatResponse>;
+}
+
+export async function explainChart(
+  sql: string,
+  visualization: VisualizationSpec,
+): Promise<ChartExplanation> {
+  const response = await fetch(apiUrl("/api/v1/ai/explain-chart"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sql, visualization }),
+  });
+  const payload = await response.json().catch(() => null) as ChartExplanation | { detail?: string } | null;
+  if (!response.ok) {
+    throw new ApiError(
+      payload && "detail" in payload ? payload.detail ?? "Không thể giải thích biểu đồ." : "Không thể giải thích biểu đồ.",
+      response.status,
+    );
+  }
+  return payload as ChartExplanation;
 }
 
 export async function executeCreateChart(
@@ -128,3 +150,34 @@ async function executeSemanticAction(
   if (!response.ok) throw new ApiError(payload && "detail" in payload ? payload.detail ?? "Không thể áp dụng thay đổi này." : "Không thể áp dụng thay đổi này.", response.status);
   return payload as ActionExecutionResponse;
 }
+
+export async function getSupersetCharts(dashboardId?: number): Promise<SupersetChartItem[]> {
+  const query = dashboardId ? `?dashboard_id=${dashboardId}` : "";
+  const response = await fetch(apiUrl(`/api/v1/superset/charts${query}`), {
+    cache: "no-store",
+  });
+  const payload = (await response.json().catch(() => null)) as SupersetChartItem[] | { detail?: string } | null;
+  if (!response.ok) {
+    throw new ApiError(
+      payload && "detail" in payload ? payload.detail ?? "Không thể tải danh sách biểu đồ." : "Không thể tải danh sách biểu đồ.",
+      response.status,
+    );
+  }
+  return (payload as SupersetChartItem[]) || [];
+}
+
+export async function explainSupersetChart(chartId: number): Promise<SupersetChartExplanationResponse> {
+  const response = await fetch(apiUrl(`/api/v1/superset/charts/${chartId}/explain`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  const payload = (await response.json().catch(() => null)) as SupersetChartExplanationResponse | { detail?: string } | null;
+  if (!response.ok) {
+    throw new ApiError(
+      payload && "detail" in payload ? payload.detail ?? "Không thể giải thích biểu đồ." : "Không thể giải thích biểu đồ.",
+      response.status,
+    );
+  }
+  return payload as SupersetChartExplanationResponse;
+}
+

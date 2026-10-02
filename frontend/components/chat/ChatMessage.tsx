@@ -1,8 +1,11 @@
+import { useRef, useState } from "react";
 import type { ChatMessage as ChatMessageType, CreateDashboardResult } from "@/lib/types";
 import { Icon } from "@/components/ui/Icon";
 import { DynamicChart } from "./DynamicChart";
 import { QueryResultDetails } from "./QueryResultDetails";
 import { ActionConfirmation, DashboardConfirmation, EditChartConfirmation, EditDashboardConfirmation } from "./ActionConfirmation";
+import { ApiError, explainChart } from "@/lib/api";
+import type { ChartExplanation } from "@/lib/types";
 
 type ChatMessageProps = {
   message: ChatMessageType;
@@ -38,6 +41,47 @@ function parameterText(parameters: Record<string, unknown> | undefined): string[
 
 export function ChatMessage({ message, onDashboardCreated, onDashboardUpdated }: ChatMessageProps) {
   const isAssistant = message.role === "assistant";
+  const [chartExplanation, setChartExplanation] = useState<ChartExplanation | null>(null);
+  const [explanationOpen, setExplanationOpen] = useState(false);
+  const [explanationLoading, setExplanationLoading] = useState(false);
+  const [explanationError, setExplanationError] = useState<string | null>(null);
+  const explanationLoadingRef = useRef(false);
+  const query = message.query;
+  const visualization = message.visualization;
+  const canExplainChart = Boolean(
+    isAssistant && query && !query.error && query.sql && query.rows.length >= 2 &&
+    visualization && visualization.type !== "none" &&
+    ["bar", "line", "pie", "area"].includes(visualization.type) &&
+    visualization.x_axis && visualization.y_axis,
+  );
+
+  const handleChartExplanation = async () => {
+    if (explanationLoadingRef.current) return;
+    if (chartExplanation) {
+      setExplanationOpen((open) => !open);
+      return;
+    }
+    if (!query?.sql || !visualization) return;
+
+    explanationLoadingRef.current = true;
+    setExplanationLoading(true);
+    setExplanationError(null);
+    try {
+      const result = await explainChart(query.sql, visualization);
+      setChartExplanation(result);
+      setExplanationOpen(true);
+    } catch (requestError) {
+      setExplanationError(
+        requestError instanceof ApiError
+          ? requestError.message
+          : "Không thể giải thích biểu đồ. Vui lòng thử lại.",
+      );
+      setExplanationOpen(false);
+    } finally {
+      explanationLoadingRef.current = false;
+      setExplanationLoading(false);
+    }
+  };
 
   return (
     <article className={`chat-message ${isAssistant ? "assistant-message" : "user-message"}`}>
@@ -74,6 +118,47 @@ export function ChatMessage({ message, onDashboardCreated, onDashboardUpdated }:
             rows={message.query.rows}
             eyebrow={message.pendingAction?.action === "EDIT_DASHBOARD" && message.pendingAction.edit_dashboard_plan.operation === "ADD_CHART" ? "Xem trước biểu đồ sẽ thêm vào bảng điều khiển" : undefined}
           />
+        )}
+
+        {canExplainChart && (
+          <section className="chart-explanation" aria-label="Giải thích biểu đồ">
+            <button
+              className="chart-explanation-trigger"
+              type="button"
+              onClick={handleChartExplanation}
+              disabled={explanationLoading}
+              aria-busy={explanationLoading}
+              aria-expanded={explanationOpen}
+            >
+              <span aria-hidden="true">✦</span>
+              {explanationLoading
+                ? "Đang phân tích biểu đồ…"
+                : chartExplanation
+                  ? explanationOpen ? "Ẩn giải thích" : "Hiện giải thích"
+                  : explanationError ? "Thử lại" : "Giải thích biểu đồ"}
+            </button>
+            {explanationError && <p className="chart-explanation-error" role="alert">{explanationError}</p>}
+            {explanationOpen && chartExplanation && (
+              <div className="chart-explanation-result" aria-live="polite">
+                <div>
+                  <h5>Tóm tắt</h5>
+                  <p>{chartExplanation.summary}</p>
+                </div>
+                {chartExplanation.highlights.length > 0 && (
+                  <div>
+                    <h5>Điểm nổi bật</h5>
+                    <ul>
+                      {chartExplanation.highlights.map((highlight, index) => <li key={`${index}-${highlight}`}>{highlight}</li>)}
+                    </ul>
+                  </div>
+                )}
+                <div>
+                  <h5>Lưu ý</h5>
+                  <p>{chartExplanation.note}</p>
+                </div>
+              </div>
+            )}
+          </section>
         )}
 
         {isAssistant && message.query && !message.query.error && (

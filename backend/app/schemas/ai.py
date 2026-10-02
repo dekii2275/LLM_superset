@@ -91,6 +91,17 @@ class VisualizationSpec(BaseModel):
     y_label: str | None = None
 
 
+class ExplainChartRequest(BaseModel):
+    sql: str = Field(min_length=1, max_length=20_000)
+    visualization: VisualizationSpec
+
+
+class ChartExplanation(BaseModel):
+    summary: str = Field(max_length=500)
+    highlights: list[str] = Field(default_factory=list, max_length=6)
+    note: str = Field(max_length=700)
+
+
 class ChartPlan(BaseModel):
     """A semantic chart request; deliberately independent from Superset form_data."""
 
