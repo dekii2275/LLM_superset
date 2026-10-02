@@ -22,7 +22,7 @@ export function AppHeader({ sidebarOpen, onToggleSidebar }: AppHeaderProps) {
       </button>
 
       <Link className="brand" href="/" aria-label="Trang chủ AI BI Assistant">
-        <Image className="brand-logo" src="/superset-logo.png" alt="Apache Superset" width={110} height={64} loading="eager" />
+        <Image className="brand-logo" src="/superset-logo-transparent.png" alt="Apache Superset" width={110} height={64} loading="eager" />
       </Link>
     </header>
   );
