@@ -148,7 +148,7 @@ a {
   width: 110px;
   height: 64px;
   border-radius: 4px;
-  background: #FFFFFF;
+  background: transparent;
   object-fit: contain;
 }
 
@@ -436,8 +436,8 @@ a {
   gap: 9px;
   border: 1px solid var(--primary);
   border-radius: 8px;
-  background: var(--primary);
-  color: #FFFFFF;
+  background: #FFFFFF;
+  color: var(--primary);
   cursor: pointer;
   padding: 0 10px;
   transition: background 140ms ease, border-color 140ms ease;
@@ -446,7 +446,7 @@ a {
 
 .new-analysis-button:hover {
   border-color: var(--accent);
-  background: var(--accent);
+  background: var(--panel-hover);
 }
 
 .new-analysis-button span {
@@ -457,9 +457,9 @@ a {
 }
 
 .new-analysis-button kbd {
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid var(--line-strong);
   border-radius: 4px;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-soft);
   font: 9px Inter, sans-serif;
   padding: 3px 5px;
 }
