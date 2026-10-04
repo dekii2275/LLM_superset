@@ -24,7 +24,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_BASE_URL = "http://localhost:58088"
+DEFAULT_BASE_URL = "http://localhost:59088"
 DEFAULT_FRONTEND_URL = "http://localhost:43117"
 DATABASE_NAME = "NYC Taxi PostgreSQL"
 DATABASE_NAME_ALIASES = {DATABASE_NAME, "NYC Yellow Taxi PostgreSQL"}

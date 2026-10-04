@@ -1,11 +1,15 @@
+import asyncio
+import base64
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
 from app.core.config import settings
-from app.schemas.ai import ChartExplanation, QueryResult, VisualizationSpec
+from app.schemas.ai import ChartExplanation, DashboardReportRequest, QueryResult, VisualizationSpec
+from app.services.ai_settings import is_llm_enabled
 from app.services.chart_explanation_service import (
     ChartExplanationService,
     _as_decimal,
@@ -267,3 +271,66 @@ async def explain_superset_chart(chart_id: int) -> dict[str, Any]:
         logger.exception("explain_superset_chart_failed chart_id=%s", chart_id)
         raise HTTPException(status_code=500, detail=f"Không thể phân tích biểu đồ: {error}") from error
 
+@router.post("/report")
+async def create_dashboard_report(request: DashboardReportRequest) -> dict[str, Any]:
+    if not is_llm_enabled():
+        raise HTTPException(status_code=503, detail="AI đã tắt trong Settings. Hãy bật lại để tạo báo cáo.")
+    if not settings.gemini_api_key:
+        raise HTTPException(status_code=503, detail="Gemini API is not configured")
+
+    try:
+        client = await asyncio.to_thread(get_client)
+        dashboard = await asyncio.to_thread(
+            client.dashboard_chart_data,
+            settings.superset_dashboard_slug,
+            request.active_tabs,
+            request.data_mask,
+        )
+        chart_screenshots = await asyncio.to_thread(
+            client.dashboard_chart_screenshots,
+            dashboard["dashboard_id"],
+            [chart["id"] for chart in dashboard["charts"]],
+            dashboard["active_tabs"],
+            dashboard["data_mask"],
+        )
+        report_charts = [dict(chart) for chart in dashboard["charts"]]
+        report = await GeminiService(
+            settings.gemini_api_key,
+            settings.gemini_model,
+            answer_max_rows=settings.ai_answer_max_rows,
+        ).generate_dashboard_report(
+            dashboard["dashboard_title"],
+            report_charts,
+            active_tab_title=dashboard["active_tab_title"],
+            applied_filters=dashboard["applied_filters"],
+        )
+    except HTTPException:
+        raise
+    except SupersetEmbedError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except Exception as error:
+        provider_status = getattr(error, "code", None)
+        logger.error(
+            "dashboard_report_failed error_type=%s status=%s",
+            type(error).__name__, provider_status,
+        )
+        if provider_status == 429:
+            raise HTTPException(status_code=429, detail="Gemini rate limit reached; retry later") from error
+        if provider_status in {500, 503, 504}:
+            raise HTTPException(status_code=503, detail="Gemini is temporarily unavailable; retry later") from error
+        raise HTTPException(status_code=502, detail="Không thể tạo báo cáo lúc này.") from error
+
+    return {
+        "dashboard_title": dashboard["dashboard_title"],
+        "active_tab_title": dashboard["active_tab_title"],
+        "applied_filters": dashboard["applied_filters"],
+        "analysis": report.model_dump(),
+        "charts": [
+            {
+                **chart,
+                "screenshot_base64": base64.b64encode(chart_screenshots[chart["id"]]).decode("ascii"),
+            }
+            for chart in dashboard["charts"]
+        ],
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }

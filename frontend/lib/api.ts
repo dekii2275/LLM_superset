@@ -24,7 +24,7 @@ export class ApiError extends Error {
   }
 }
 
-export type AISettings = { llm_enabled: boolean };
+export type AISettings = { llm_enabled: boolean; tokens_used: number };
 
 export async function getAISettings(): Promise<AISettings> {
   const response = await fetch(apiUrl("/api/v1/ai/settings"), { cache: "no-store" });

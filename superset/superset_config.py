@@ -22,7 +22,12 @@ ENABLE_PROXY_FIX = os.environ.get("ENABLE_PROXY_FIX", "false").lower() == "true"
 # Enable the official embedded-dashboard flow.  The separate guest-token key
 # should be supplied in production; the fallback keeps existing local installs
 # working until that value is added to the environment file.
-FEATURE_FLAGS = {"EMBEDDED_SUPERSET": True}
+FEATURE_FLAGS = {
+    "EMBEDDED_SUPERSET": True,
+    "THUMBNAILS": True,
+    "ENABLE_DASHBOARD_SCREENSHOT_ENDPOINTS": True,
+    "PLAYWRIGHT_REPORTS_AND_THUMBNAILS": True,
+}
 GUEST_TOKEN_JWT_SECRET = os.environ.get("SUPERSET_GUEST_TOKEN_JWT_SECRET", secret_key)
 GUEST_TOKEN_JWT_EXP_SECONDS = 300
 # Gamma is the read-only built-in role appropriate for this local dashboard
@@ -71,7 +76,152 @@ SQLALCHEMY_DATABASE_URI = URL.create(
 ).render_as_string(hide_password=False)
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+
+def _register_dashboard_chart_screenshot_api(_app):
+    import base64
+
+    from flask import g, request
+    from flask_appbuilder import permission_name
+    from flask_appbuilder.api import expose, protect, safe
+    from superset.commands.dashboard.permalink.create import CreateDashboardPermalinkCommand
+    from superset.dashboards.api import DashboardRestApi, with_dashboard
+    from superset.utils.screenshots import DashboardScreenshot
+    from superset.utils.urls import get_url_path
+    from superset.utils.webdriver import (
+        app as superset_app,
+        machine_auth_provider_factory,
+        sync_playwright,
+    )
+
+    @expose("/<id_or_slug>/chart_screenshots/", methods=("POST",))
+    @protect()
+    @safe
+    @permission_name("read")
+    @with_dashboard
+    def chart_screenshots(self, dashboard):
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return self.response_400(message="A JSON object is required.")
+
+        chart_ids = payload.get("chart_ids")
+        active_tabs = payload.get("activeTabs", [])
+        data_mask = payload.get("dataMask", {})
+        if (
+            not isinstance(chart_ids, list)
+            or not chart_ids
+            or len(chart_ids) > 50
+            or any(type(chart_id) is not int for chart_id in chart_ids)
+            or len(set(chart_ids)) != len(chart_ids)
+            or not isinstance(active_tabs, list)
+            or any(not isinstance(tab, str) for tab in active_tabs)
+            or not isinstance(data_mask, dict)
+        ):
+            return self.response_400(message="Invalid chart screenshot request.")
+
+        dashboard_chart_ids = {chart.id for chart in dashboard.slices}
+        if any(chart_id not in dashboard_chart_ids for chart_id in chart_ids):
+            return self.response_400(message="A chart does not belong to this dashboard.")
+
+        dashboard_state = {
+            "dataMask": data_mask,
+            "activeTabs": active_tabs,
+            "anchor": payload.get("anchor", ""),
+            "urlParams": payload.get("urlParams", []),
+        }
+        permalink_key = CreateDashboardPermalinkCommand(
+            dashboard_id=str(dashboard.id),
+            state=dashboard_state,
+        ).run()
+        dashboard_url = get_url_path("Superset.dashboard_permalink", key=permalink_key)
+
+        screenshot = DashboardScreenshot(dashboard_url, dashboard.digest)
+        driver = screenshot.driver()
+        window_height, window_width = driver._window[1], driver._window[0]
+        pixel_density = superset_app.config["WEBDRIVER_WINDOW"].get("pixel_density", 1)
+        chart_images = {}
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(
+                args=superset_app.config["WEBDRIVER_OPTION_ARGS"]
+            )
+            try:
+                context = browser.new_context(
+                    bypass_csp=True,
+                    viewport={"height": window_height, "width": window_width},
+                    device_scale_factor=pixel_density,
+                )
+                context.set_default_timeout(
+                    superset_app.config["SCREENSHOT_PLAYWRIGHT_DEFAULT_TIMEOUT"]
+                )
+                machine_auth_provider_factory.instance.authenticate_browser_context(
+                    context, g.user
+                )
+                page = context.new_page()
+                page.goto(
+                    dashboard_url,
+                    wait_until=superset_app.config["SCREENSHOT_PLAYWRIGHT_WAIT_EVENT"],
+                )
+                page.wait_for_timeout(
+                    superset_app.config["SCREENSHOT_SELENIUM_HEADSTART"] * 1000
+                )
+
+                for chart_id in chart_ids:
+                    chart = page.locator(
+                        f'.chart-slice[data-test-chart-id="{chart_id}"]'
+                    )
+                    chart.wait_for(state="visible")
+                    container = chart.locator(".chart-container").first
+                    container.wait_for(state="visible")
+                    chart.evaluate(
+                        "element => { element.style.backgroundColor = '#fff'; "
+                        "element.style.backgroundImage = 'none'; element.style.opacity = '1'; }"
+                    )
+                    container.evaluate(
+                        "element => { element.style.backgroundColor = '#fff'; "
+                        "element.style.backgroundImage = 'none'; element.style.opacity = '1'; }"
+                    )
+                    for loading in container.locator(".loading").all():
+                        loading.wait_for(state="detached")
+                    page.wait_for_timeout(
+                        superset_app.config["SCREENSHOT_SELENIUM_ANIMATION_WAIT"] * 1000
+                    )
+                    chart_images[str(chart_id)] = base64.b64encode(
+                        container.screenshot(type="png")
+                    ).decode("ascii")
+            finally:
+                browser.close()
+
+        return self.response(200, result={"chart_images": chart_images})
+
+    DashboardRestApi.chart_screenshots = chart_screenshots
+    DashboardRestApi.include_route_methods = (
+        set(DashboardRestApi.include_route_methods) | {"chart_screenshots"}
+    )
+    DashboardRestApi.method_permission_name = {
+        **DashboardRestApi.method_permission_name,
+        "chart_screenshots": "read",
+    }
+
+
+FLASK_APP_MUTATOR = _register_dashboard_chart_screenshot_api
+
 redis_url = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+
+class CeleryConfig:
+    broker_url = redis_url
+    result_backend = redis_url
+    imports = ("superset.sql_lab", "superset.tasks.thumbnails")
+    worker_prefetch_multiplier = 1
+    task_acks_late = True
+
+
+CELERY_CONFIG = CeleryConfig
+THUMBNAIL_CACHE_CONFIG = {
+    "CACHE_TYPE": "RedisCache",
+    "CACHE_REDIS_URL": redis_url,
+    "CACHE_DEFAULT_TIMEOUT": 604800,
+    "CACHE_KEY_PREFIX": "superset_thumb__",
+}
+WEBDRIVER_BASEURL = f"http://superset:8088{application_root}/"
 
 CACHE_CONFIG = {
     "CACHE_TYPE": "RedisCache",

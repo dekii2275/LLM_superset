@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:43117"
     frontend_origins: str = "http://localhost:43117,http://127.0.0.1:43117"
     superset_url: str = "http://superset:8088"
-    superset_public_url: str = "http://localhost:58088"
+    superset_public_url: str = "http://localhost:59088"
     superset_mcp_internal_url: str = "http://superset-mcp:5008/mcp"
     superset_admin_username: str | None = None
     superset_admin_password: str | None = None

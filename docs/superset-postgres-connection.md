@@ -19,7 +19,7 @@ Hai database dùng chung PostgreSQL server nhưng là hai kết nối với mụ
 | --- | --- | --- | --- |
 | Máy host tới PostgreSQL | `localhost` | `55439` | Port mapping `127.0.0.1:55439:5432` |
 | Superset container tới PostgreSQL | `postgres` | `5432` | Dùng Docker service DNS và port nội bộ |
-| Máy host tới Superset UI | `localhost` | `58088` | Port mapping `127.0.0.1:58088:8088` |
+| Máy host tới Superset UI | `localhost` | `59088` | Port mapping `127.0.0.1:59088:8088` |
 
 Không dùng `localhost:55439` trong SQLAlchemy URI của Superset: bên trong container, `localhost` là chính container Superset. URI analytics có dạng:
 
@@ -33,7 +33,7 @@ Mật khẩu reader được lưu cục bộ trong `.env.local` tại `SUPERSET_
 
 ```text
 Browser
-   ↓ HTTP tới localhost:58088
+   ↓ HTTP tới localhost:59088
 Superset UI
    ↓
 Superset backend
@@ -64,7 +64,7 @@ Role không có `SUPERUSER`, `CREATEDB`, `CREATEROLE`, `INSERT`, `UPDATE`, `DELE
 
 ## Xem connection hiện có trong UI
 
-1. Mở <http://localhost:58088>.
+1. Mở <http://localhost:59088>.
 2. Đăng nhập bằng tên người dùng trong `SUPERSET_ADMIN_USERNAME` ở `.env.local`.
 3. Mở **Settings → Data: Database Connections**.
 4. Chọn **NYC Taxi PostgreSQL** để xem thông tin connection.
@@ -74,7 +74,7 @@ Role không có `SUPERUSER`, `CREATEDB`, `CREATEROLE`, `INSERT`, `UPDATE`, `DELE
 
 Superset 6.1.0 hướng dẫn flow **Settings → Data: Database Connections → + DATABASE → chọn database type hoặc SQLAlchemy URI → Test Connection → Connect**. Connection này được tạo qua API sau khi gọi Test Connection; các bước UI tương đương là:
 
-1. Mở <http://localhost:58088> và đăng nhập bằng Superset admin.
+1. Mở <http://localhost:59088> và đăng nhập bằng Superset admin.
 2. Mở **Settings → Data: Database Connections** rồi chọn **+ DATABASE**.
 3. Chọn **PostgreSQL**.
 4. Đặt tên connection là `NYC Taxi PostgreSQL`.
@@ -95,7 +95,7 @@ Tên trường trong UI có thể được trình bày trong phần form connect
 | Kiểm tra | Kết quả |
 | --- | --- |
 | PostgreSQL | Healthy; service `postgres`; port trong container `5432`; host port `55439` |
-| Superset | Healthy; version `6.1.0`; UI port `58088` |
+| Superset | Healthy; version `6.1.0`; UI port `59088` |
 | Docker DNS/network | `superset` phân giải được `postgres`; hai container cùng Compose network; TCP `postgres:5432` kết nối được |
 | PostgreSQL driver | `psycopg2` `2.9.13` có trong Superset container |
 | Database và dữ liệu | `current_database()` là `ai_bi`; `raw.yellow_taxi_trips` có `11,458,193` dòng |

@@ -15,7 +15,7 @@ from app.schemas.ai import (
     EditDashboardOperation,
 )
 from app.services.ai_bi_service import AIBIService
-from app.services.ai_settings import is_llm_enabled, set_llm_enabled
+from app.services.ai_settings import get_token_usage, is_llm_enabled, set_llm_enabled
 from app.services.chart_explanation_service import (
     ChartExplanationService,
     ChartExplanationValidationError,
@@ -59,13 +59,13 @@ async def ai_health() -> dict[str, str | bool]:
 
 
 @router.get("/settings")
-def get_ai_settings() -> dict[str, bool]:
-    return {"llm_enabled": is_llm_enabled()}
+def get_ai_settings() -> dict[str, bool | int]:
+    return {"llm_enabled": is_llm_enabled(), "tokens_used": get_token_usage()}
 
 
 @router.put("/settings")
-def update_ai_settings(request: AISettingsUpdate) -> dict[str, bool]:
-    return {"llm_enabled": set_llm_enabled(request.llm_enabled)}
+def update_ai_settings(request: AISettingsUpdate) -> dict[str, bool | int]:
+    return {"llm_enabled": set_llm_enabled(request.llm_enabled), "tokens_used": get_token_usage()}
 
 
 @router.post("/chat", response_model=AIChatResponse)

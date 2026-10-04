@@ -20,6 +20,16 @@ def _ensure_table() -> None:
                 """
             )
         )
+        connection.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS ai_token_usage (
+                    usage_key VARCHAR(32) PRIMARY KEY,
+                    total_tokens BIGINT NOT NULL DEFAULT 0
+                )
+                """
+            )
+        )
     _table_ready = True
 
 
@@ -46,3 +56,30 @@ def set_llm_enabled(enabled: bool) -> bool:
             {"enabled": enabled},
         )
     return enabled
+
+
+def get_token_usage() -> int:
+    _ensure_table()
+    with engine.connect() as connection:
+        total = connection.execute(
+            text("SELECT total_tokens FROM ai_token_usage WHERE usage_key = 'gemini'")
+        ).scalar_one_or_none()
+    return int(total or 0)
+
+
+def record_token_usage(tokens: int) -> None:
+    if tokens <= 0:
+        return
+    _ensure_table()
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                INSERT INTO ai_token_usage (usage_key, total_tokens)
+                VALUES ('gemini', :tokens)
+                ON CONFLICT (usage_key) DO UPDATE
+                SET total_tokens = ai_token_usage.total_tokens + EXCLUDED.total_tokens
+                """
+            ),
+            {"tokens": tokens},
+        )

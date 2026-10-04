@@ -295,6 +295,37 @@ a {
   padding-top: 18px;
 }
 
+.ai-token-usage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+
+.ai-token-usage span {
+  display: grid;
+  gap: 5px;
+}
+
+.ai-token-usage b {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.ai-token-usage small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ai-token-usage strong {
+  color: var(--primary);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
 .settings-toggle-row b {
   color: var(--text);
   font-size: 12px;
@@ -1912,6 +1943,82 @@ a {
   color: var(--primary);
 }
 
+.superset-embed-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.superset-report-button {
+  border: 1px solid #098B43;
+  border-radius: 7px;
+  padding: 8px 12px;
+  background: #098B43;
+  color: #fff;
+  cursor: pointer;
+}
+
+.superset-report-button:disabled {
+  opacity: 0.65;
+}
+
+.superset-report-menu {
+  position: relative;
+}
+
+.superset-report-menu > summary {
+  list-style: none;
+}
+
+.superset-report-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.superset-report-menu > summary[aria-disabled="true"] {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.superset-report-options {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  min-width: 140px;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.14);
+}
+
+.superset-report-options button {
+  border: 0;
+  border-radius: 5px;
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.superset-report-options button:hover:not(:disabled) {
+  background: var(--panel-hover);
+  color: var(--primary);
+}
+
+.superset-report-options button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.superset-report-status {
+  margin: 0;
+  color: var(--muted);
+}
+
 .superset-embed-frame {
   position: relative;
   width: 100%;
@@ -2551,6 +2658,7 @@ a {
   .superset-embed-header {
     min-height: 52px;
     padding: 8px 10px 8px 12px;
+    flex-wrap: wrap;
   }
 
   .superset-embed-header h2 {
@@ -2565,8 +2673,97 @@ a {
     padding: 7px 9px;
     font-size: 12px;
   }
+
+  .superset-report-button {
+    padding: 7px 9px;
+    font-size: 12px;
+  }
+
+  .superset-embed-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
 }
 
+.dashboard-report {
+  position: fixed;
+  top: 0;
+  left: -10000px;
+  width: 794px;
+  box-sizing: border-box;
+  background: #fff;
+  color: #0F172A;
+  font-family: "Segoe UI", "Noto Sans", sans-serif;
+  visibility: hidden;
+  pointer-events: none;
+  padding: 44px;
+}
+
+.dashboard-report h1 {
+  margin: 0 0 5px;
+  font-size: 32px;
+  line-height: 1.2;
+}
+
+.dashboard-report h2 {
+  margin: 0 0 14px;
+  color: #098B43;
+  font-size: 21px;
+}
+
+.dashboard-report-meta,
+.dashboard-report-note {
+  color: #475569;
+  font-size: 12px;
+}
+
+.dashboard-report h3 {
+  margin: 18px 0 6px;
+  color: #0F172A;
+  font-size: 17px;
+}
+
+.dashboard-report p,
+.dashboard-report li {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.dashboard-report-overview ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.dashboard-report-note {
+  margin: 14px 0 22px;
+  border-left: 3px solid #098B43;
+  padding-left: 10px;
+}
+
+.dashboard-report-chart-section {
+  margin-top: 20px;
+}
+
+.dashboard-report-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 6px;
+}
+
+.dashboard-report-chart-note {
+  color: #475569;
+  font-size: 12px;
+}
+
+.dashboard-report-metric strong {
+  color: #0F172A;
+  font-size: 21px;
+}
+
+.dashboard-report-chart-note {
+  margin: 8px 0;
+}
 .sql-overlay {
   position: fixed;
   z-index: 100;

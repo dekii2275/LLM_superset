@@ -41,7 +41,7 @@ jobs:
         working-directory: frontend
         env:
           NEXT_PUBLIC_API_URL: http://localhost:48123
-          NEXT_PUBLIC_SUPERSET_URL: http://localhost:58088
+          NEXT_PUBLIC_SUPERSET_URL: http://localhost:59088
         run: |
           npm ci
           npm run build

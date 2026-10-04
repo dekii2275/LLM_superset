@@ -67,7 +67,7 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:43117}
       FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:43117,http://127.0.0.1:43117}
       SUPERSET_URL: http://superset:8088${SUPERSET_APP_ROOT:-}
-      SUPERSET_PUBLIC_URL: ${SUPERSET_PUBLIC_URL:-http://localhost:58088}
+      SUPERSET_PUBLIC_URL: ${SUPERSET_PUBLIC_URL:-http://localhost:59088}
       SUPERSET_ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME:?Set SUPERSET_ADMIN_USERNAME in .env.local or .env.prod}
       SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:?Set SUPERSET_ADMIN_PASSWORD in .env.local or .env.prod}
       SUPERSET_MCP_INTERNAL_URL: http://superset-mcp:5008/mcp
@@ -106,7 +106,7 @@ services:
       context: ./frontend
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:48123}
-      NEXT_PUBLIC_SUPERSET_URL: ${NEXT_PUBLIC_SUPERSET_URL:-http://localhost:58088}
+      NEXT_PUBLIC_SUPERSET_URL: ${NEXT_PUBLIC_SUPERSET_URL:-http://localhost:59088}
       NODE_ENV: development
     ports:
       - "127.0.0.1:43117:43117"
@@ -153,7 +153,7 @@ services:
     volumes:
       - superset_home:/app/superset_home
     ports:
-      - "127.0.0.1:58088:8088"
+      - "127.0.0.1:${SUPERSET_HOST_PORT:-59088}:8088"
     depends_on:
       superset-init:
         condition: service_completed_successfully
@@ -171,6 +171,23 @@ services:
       timeout: 5s
       retries: 20
       start_period: 60s
+    networks:
+      - ai_bi_network
+
+  superset-worker:
+    build:
+      context: ./superset
+    restart: unless-stopped
+    environment:
+      <<: *superset-environment
+    volumes:
+      - superset_home:/app/superset_home
+    command: ["celery", "--app=superset.tasks.celery_app:app", "worker", "--pool=prefork", "--concurrency=1", "--loglevel=info"]
+    depends_on:
+      superset:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - ai_bi_network
 

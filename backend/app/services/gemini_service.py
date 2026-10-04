@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
+import logging
 from typing import Any
 
 from google import genai
@@ -10,6 +13,7 @@ from google.genai import types
 from app.schemas.ai import (
     ChartExplanation,
     ChartPlan,
+    DashboardReport,
     DashboardPlan,
     EditChartPlan,
     EditDashboardPlan,
@@ -18,6 +22,7 @@ from app.schemas.ai import (
     SQLGenerationResult,
     VisualizationSpec,
 )
+from app.services.ai_settings import record_token_usage
 
 
 SYSTEM_INSTRUCTION = """You are an AI BI assistant connected to Apache Superset through MCP.
@@ -46,6 +51,8 @@ with trip.do_location_id = zone.location_id. The pickup timestamp is
 tpep_pickup_datetime. payment_type is numeric (1 credit card, 2 cash, 3 no
 charge, 4 dispute, 5 unknown, 0 flex fare)."""
 
+logger = logging.getLogger(__name__)
+
 
 class GeminiService:
     def __init__(self, api_key: str, model: str, *, answer_max_rows: int = 20) -> None:
@@ -53,8 +60,19 @@ class GeminiService:
         self.model = model
         self.answer_max_rows = max(1, answer_max_rows)
 
+    async def _generate_content(self, **kwargs: Any) -> Any:
+        provider_call = self.client.aio.models.generate_content
+        response = await provider_call(**kwargs)
+        total_tokens = getattr(getattr(response, "usage_metadata", None), "total_token_count", None)
+        if total_tokens is not None:
+            try:
+                await asyncio.to_thread(record_token_usage, int(total_tokens))
+            except Exception:
+                logger.warning("gemini_token_usage_record_failed", exc_info=True)
+        return response
+
     async def generate(self, contents: list[Any], tools: list[types.Tool]) -> Any:
-        return await self.client.aio.models.generate_content(
+        return await self._generate_content(
             model=self.model,
             contents=contents,
             config=types.GenerateContentConfig(
@@ -113,7 +131,7 @@ Rules:
 7. `requires_confirmation` is true only for create/edit intents.
 
 User message: {message}"""
-        response = await self.client.aio.models.generate_content(
+        response = await self._generate_content(
             model=self.model,
             contents=prompt,
             config=types.GenerateContentConfig(
@@ -150,7 +168,7 @@ Available PostgreSQL analytics schema:
 {NYC_TAXI_SCHEMA}
 
 User request: {message}"""
-        response = await self.client.aio.models.generate_content(
+        response = await self._generate_content(
             model=self.model,
             contents=prompt,
             config=types.GenerateContentConfig(
@@ -192,7 +210,7 @@ Available analytics schema:
 {NYC_TAXI_SCHEMA}
 
 User request: {message}"""
-        response = await self.client.aio.models.generate_content(
+        response = await self._generate_content(
             model=self.model,
             contents=prompt,
             config=types.GenerateContentConfig(
@@ -276,12 +294,48 @@ Columns: {result.columns}
 Rows: {result.rows[:self.answer_max_rows]}
 Row count: {result.row_count}
 """
-        response = await self.client.aio.models.generate_content(
+        response = await self._generate_content(
             model=self.model,
             contents=prompt,
             config=types.GenerateContentConfig(temperature=0),
         )
         return (response.text or "").strip()
+
+    async def generate_dashboard_report(
+        self,
+        dashboard_title: str,
+        charts: list[dict[str, Any]],
+        *,
+        active_tab_title: str = "",
+        applied_filters: list[str] | None = None,
+    ) -> DashboardReport:
+        prompt = f"""Create a Vietnamese business report for the Superset dashboard "{dashboard_title}".
+Use only the supplied chart results. Do not invent facts, values, causes, or recommendations.
+Return a concise overview, at most five evidence-backed highlights, and exactly one
+chart_insights entry for every supplied chart_id. Each insight must be one or two sentences
+about that chart. Mention if its data is unavailable or only a sample. Keep chart_id values
+exactly as supplied.
+
+Active tab: {active_tab_title or "Dashboard"}
+Selected dashboard filters: {"; ".join(applied_filters or []) or "none"}
+
+Dashboard chart results (rows may be truncated to a sample):
+{json.dumps(charts, ensure_ascii=False, default=str)}"""
+        response = await self._generate_content(
+            model=self.model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0,
+                response_mime_type="application/json",
+                response_schema=DashboardReport,
+            ),
+        )
+        parsed = getattr(response, "parsed", None)
+        if isinstance(parsed, DashboardReport):
+            return parsed
+        if isinstance(parsed, dict):
+            return DashboardReport.model_validate(parsed)
+        return DashboardReport.model_validate_json(response.text or "")
 
     async def generate_visualization(
         self, question: str, result: QueryResult
@@ -303,7 +357,7 @@ Columns: {result.columns}
 Rows (sample): {result.rows[:self.answer_max_rows]}
 Row count: {result.row_count}
 """
-        response = await self.client.aio.models.generate_content(
+        response = await self._generate_content(
             model=self.model,
             contents=prompt,
             config=types.GenerateContentConfig(
@@ -320,7 +374,7 @@ Row count: {result.row_count}
         return VisualizationSpec.model_validate_json(response.text or "")
 
     async def _structured_plan(self, prompt: str) -> SQLGenerationResult:
-        response = await self.client.aio.models.generate_content(
+        response = await self._generate_content(
             model=self.model,
             contents=prompt,
             config=types.GenerateContentConfig(
@@ -337,7 +391,7 @@ Row count: {result.row_count}
         return SQLGenerationResult.model_validate_json(response.text or "")
 
     async def _edit_plan(self, prompt: str, schema: type[Any]) -> Any:
-        response = await self.client.aio.models.generate_content(
+        response = await self._generate_content(
             model=self.model,
             contents=prompt,
             config=types.GenerateContentConfig(

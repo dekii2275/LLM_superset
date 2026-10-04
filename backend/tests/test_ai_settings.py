@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 
-from app.api.ai import ai_chat
+from app.api.ai import ai_chat, get_ai_settings
 from app.schemas.ai import AIChatRequest
 from app.services import ai_settings
 
@@ -32,6 +32,19 @@ class AISettingsTests(unittest.TestCase):
         self.assertFalse(ai_settings.is_llm_enabled())
         ai_settings.set_llm_enabled(True)
         self.assertTrue(ai_settings.is_llm_enabled())
+
+    def test_token_usage_accumulates_in_database(self):
+        self.assertEqual(ai_settings.get_token_usage(), 0)
+        ai_settings.record_token_usage(123)
+        ai_settings.record_token_usage(77)
+        self.assertEqual(ai_settings.get_token_usage(), 200)
+
+    def test_settings_response_includes_system_token_total(self):
+        ai_settings.record_token_usage(200)
+        self.assertEqual(
+            get_ai_settings(),
+            {"llm_enabled": True, "tokens_used": 200},
+        )
 
 class AIChatSettingTests(unittest.IsolatedAsyncioTestCase):
     async def test_chat_is_rejected_when_llm_is_disabled(self):

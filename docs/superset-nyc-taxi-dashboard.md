@@ -24,7 +24,7 @@ Phase này kết thúc trong Apache Superset. Chưa có Superset Embed, Guest To
 | --- | --- |
 | Superset service | `superset` trong Docker Compose |
 | Superset version | `6.1.0` |
-| Superset URL | <http://localhost:58088> |
+| Superset URL | <http://localhost:59088> |
 | Database connection | `NYC Taxi PostgreSQL`, ID `1` |
 | PostgreSQL database | `ai_bi` |
 | Schema/table | `raw.yellow_taxi_trips` |
@@ -83,7 +83,7 @@ Chart thanh toán giữ nguyên các mã numeric từ `payment_type`; phase này
 
 Tên: **NYC Yellow Taxi Overview**. Layout đặt hai Big Number cạnh nhau, Trips Over Time bên dưới và phân bố Payment Type ở hàng cuối. Dashboard được publish trong Superset cục bộ để mở trực tiếp sau khi đăng nhập.
 
-URL: <http://localhost:58088/superset/dashboard/1/>
+URL: <http://localhost:59088/superset/dashboard/1/>
 
 ## Chạy lại setup
 
@@ -93,13 +93,13 @@ Sau khi Docker Compose đang chạy và `.env.local` có Superset admin credenti
 python superset/scripts/setup_nyc_taxi_demo.py
 ```
 
-Mặc định script gọi Superset trên host tại `http://localhost:58088`. Có thể đổi địa chỉ bằng `--base-url`. Script đọc credential từ biến môi trường hoặc `.env.local` (hoặc `.env.prod` nếu file local không có), không ghi password/secret vào output, tái sử dụng database connection và tìm object theo tên trước khi tạo hoặc cập nhật.
+Mặc định script gọi Superset trên host tại `http://localhost:59088`. Có thể đổi địa chỉ bằng `--base-url`. Script đọc credential từ biến môi trường hoặc `.env.local` (hoặc `.env.prod` nếu file local không có), không ghi password/secret vào output, tái sử dụng database connection và tìm object theo tên trước khi tạo hoặc cập nhật.
 
 Script dùng Python standard library và Superset REST API của version đang chạy. Nó kiểm tra metadata Dataset, cập nhật metrics, upsert bốn chart, chạy query cho mỗi chart, tạo/cập nhật dashboard và in ID cùng URL.
 
 ## Tự thao tác bằng UI
 
-1. Mở <http://localhost:58088> và đăng nhập Superset.
+1. Mở <http://localhost:59088> và đăng nhập Superset.
 2. Vào **Data → Datasets**. Dataset vật lý nằm dưới connection `NYC Taxi PostgreSQL`, schema `raw`, table `yellow_taxi_trips`.
 3. Chọn **Explore**, chọn visualization tương ứng, metric, dimension hoặc temporal column và filters ở trên.
 4. Bấm **Run** rồi **Save** với tên chart trong bảng.

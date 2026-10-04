@@ -102,6 +102,22 @@ class ChartExplanation(BaseModel):
     note: str = Field(max_length=700)
 
 
+class DashboardChartInsight(BaseModel):
+    chart_id: int
+    insight: str = Field(min_length=1)
+
+
+class DashboardReport(BaseModel):
+    overview: str
+    highlights: list[str] = Field(default_factory=list)
+    chart_insights: list[DashboardChartInsight] = Field(default_factory=list)
+
+
+class DashboardReportRequest(BaseModel):
+    active_tabs: list[str] = Field(default_factory=list, max_length=10)
+    data_mask: dict[str, Any] = Field(default_factory=dict)
+
+
 class ChartPlan(BaseModel):
     """A semantic chart request; deliberately independent from Superset form_data."""
 

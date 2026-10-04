@@ -6,13 +6,19 @@ import { getAISettings, setAIEnabled } from "@/lib/api";
 
 export default function SettingsPage() {
   const [llmEnabled, setLlmEnabled] = useState<boolean | null>(null);
+  const [tokensUsed, setTokensUsed] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     let active = true;
     void getAISettings()
-      .then((settings) => { if (active) setLlmEnabled(settings.llm_enabled); })
+      .then((settings) => {
+        if (active) {
+          setLlmEnabled(settings.llm_enabled);
+          setTokensUsed(settings.tokens_used);
+        }
+      })
       .catch((requestError) => {
         if (active) setError(requestError instanceof Error ? requestError.message : "Không thể tải cài đặt AI.");
       });
@@ -25,6 +31,7 @@ export default function SettingsPage() {
     try {
       const settings = await setAIEnabled(enabled);
       setLlmEnabled(settings.llm_enabled);
+      setTokensUsed(settings.tokens_used);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Không thể cập nhật cài đặt AI.");
     } finally {
@@ -61,6 +68,13 @@ export default function SettingsPage() {
               aria-label="Bật trò chuyện AI"
             />
           </label>
+          <div className="ai-token-usage">
+            <span>
+              <b>Tổng token hệ thống đã sử dụng</b>
+              <small>Cộng dồn từ các lượt gọi Gemini kể từ khi bật thống kê.</small>
+            </span>
+            <strong>{tokensUsed === null ? "—" : new Intl.NumberFormat("vi-VN").format(tokensUsed)}</strong>
+          </div>
           <p className="settings-status" role="status" aria-live="polite">
             {error ?? (saving ? "Đang lưu…" : llmEnabled === null ? "Đang tải cài đặt…" : llmEnabled ? "Đã bật trò chuyện AI" : "Đã tắt trò chuyện AI")}
           </p>

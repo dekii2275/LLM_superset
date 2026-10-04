@@ -158,7 +158,7 @@ Local URLs:
 | --- | --- |
 | Application | http://localhost:43117 |
 | API docs | http://localhost:48123/docs |
-| Superset | http://localhost:58088 |
+| Superset | http://localhost:59088 |
 
 To run the frontend and backend in Docker instead, opt in with
 `docker compose --env-file .env.local --profile app-containers up -d --build`.

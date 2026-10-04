@@ -47,7 +47,7 @@ def dashboard_background_css() -> str:
     return f"""\
 .dashboard-content {{
   background-color: #eef8f3 !important;
-  background-image: linear-gradient(rgba(239, 249, 244, 0.58), rgba(239, 249, 244, 0.58)), url("data:image/png;base64,{image}") !important;
+  background-image: url("data:image/png;base64,{image}") !important;
   background-size: cover !important;
   background-position: center center !important;
   background-repeat: no-repeat !important;
@@ -57,9 +57,9 @@ def dashboard_background_css() -> str:
   background: transparent !important;
 }}
 .dashboard-content .dashboard-component-chart-holder {{
-  background: rgba(255, 255, 255, 0.75) !important;
-  -webkit-backdrop-filter: blur(8px) !important;
-  backdrop-filter: blur(8px) !important;
+  background: rgba(255, 255, 255, 0.55) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
+  backdrop-filter: blur(2px) !important;
   border: 1px solid rgba(173, 199, 189, 0.8) !important;
   border-radius: 12px !important;
   box-shadow: 0 8px 24px rgba(29, 54, 46, 0.14) !important;
@@ -67,9 +67,13 @@ def dashboard_background_css() -> str:
 .dashboard-content .dashboard-component-chart-holder .dashboard-chart,
 .dashboard-content .dashboard-component-chart-holder .chart-container,
 .dashboard-content .dashboard-component-chart-holder .slice_container,
+.dashboard-content .dashboard-component-chart-holder .slice-container,
 .dashboard-content .dashboard-component-chart-holder canvas {{
   background: transparent !important;
   background-color: transparent !important;
+}}
+.dashboard-content .dashboard-component-chart-holder .background--white {{
+  background-color: rgba(255, 255, 255, 0.55) !important;
 }}
 .dashboard-content .dashboard-component-tabs {{
   background: transparent !important;
