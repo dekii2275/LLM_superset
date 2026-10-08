@@ -52,7 +52,7 @@ jobs:
       - name: Select images from service contents
         id: images
         env:
-          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL || 'http://localhost:55200' }}
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL || '' }}
           NEXT_PUBLIC_SUPERSET_URL: ${{ vars.NEXT_PUBLIC_SUPERSET_URL || 'http://localhost:55200/superset' }}
         run: |
           for service in backend frontend superset; do
@@ -99,7 +99,7 @@ jobs:
             type=registry,ref=ghcr.io/${{ env.GHCR_NAMESPACE }}/llm-superset-frontend:latest
           cache-to: type=registry,ref=ghcr.io/${{ env.GHCR_NAMESPACE }}/llm-superset-frontend:buildcache,mode=max
           build-args: |
-            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL || 'http://localhost:55200' }}
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL || '' }}
             NEXT_PUBLIC_SUPERSET_URL=${{ vars.NEXT_PUBLIC_SUPERSET_URL || 'http://localhost:55200/superset' }}
           tags: |
             ghcr.io/${{ env.GHCR_NAMESPACE }}/llm-superset-frontend:${{ steps.images.outputs.frontend_tag }}
