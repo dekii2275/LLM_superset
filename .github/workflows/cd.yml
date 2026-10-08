@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  GHCR_NAMESPACE: ${{ vars.GHCR_NAMESPACE || github.repository_owner }}
+
 concurrency:
   group: production-deploy
   cancel-in-progress: false
@@ -16,6 +19,7 @@ concurrency:
 jobs:
   publish:
     if: >-
+      vars.PUBLISH_ENABLED == 'true' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.conclusion == 'success'
@@ -35,6 +39,9 @@ jobs:
 
       - uses: docker/setup-buildx-action@v4
 
+      - name: Normalize image namespace
+        run: echo "GHCR_NAMESPACE=${GHCR_NAMESPACE,,}" >> "$GITHUB_ENV"
+
       - name: Log in to GHCR
         uses: docker/login-action@v4
         with:
@@ -45,8 +52,8 @@ jobs:
       - name: Select images from service contents
         id: images
         env:
-          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL || 'http://18.143.137.242:55200' }}
-          NEXT_PUBLIC_SUPERSET_URL: ${{ vars.NEXT_PUBLIC_SUPERSET_URL || 'http://18.143.137.242:55200/superset' }}
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL || 'http://localhost:55200' }}
+          NEXT_PUBLIC_SUPERSET_URL: ${{ vars.NEXT_PUBLIC_SUPERSET_URL || 'http://localhost:55200/superset' }}
         run: |
           for service in backend frontend superset; do
             source="$(git rev-parse "HEAD:$service")"
@@ -54,7 +61,7 @@ jobs:
               source="$(printf '%s\n' "$source" "$NEXT_PUBLIC_API_URL" "$NEXT_PUBLIC_SUPERSET_URL" | sha256sum | cut -d ' ' -f 1)"
             fi
             tag="source-$source"
-            image="ghcr.io/dekii2275/llm-superset-$service:$tag"
+            image="ghcr.io/$GHCR_NAMESPACE/llm-superset-$service:$tag"
             echo "${service}_tag=$tag" >> "$GITHUB_OUTPUT"
             echo "- $service: \`$image\`" >> "$GITHUB_STEP_SUMMARY"
             if docker buildx imagetools inspect "$image" >/dev/null 2>&1; then
@@ -73,13 +80,13 @@ jobs:
           context: ./backend
           push: true
           cache-from: |
-            type=registry,ref=ghcr.io/dekii2275/llm-superset-backend:buildcache
-            type=registry,ref=ghcr.io/dekii2275/llm-superset-backend:latest
-          cache-to: type=registry,ref=ghcr.io/dekii2275/llm-superset-backend:buildcache,mode=max
+            type=registry,ref=ghcr.io/${{ env.GHCR_NAMESPACE }}/llm-superset-backend:buildcache
+            type=registry,ref=ghcr.io/${{ env.GHCR_NAMESPACE }}/llm-superset-backend:latest
+          cache-to: type=registry,ref=ghcr.io/${{ env.GHCR_NAMESPACE }}/llm-superset-backend:buildcache,mode=max
           tags: |
-            ghcr.io/dekii2275/llm-superset-backend:${{ steps.images.outputs.backend_tag }}
-            ghcr.io/dekii2275/llm-superset-backend:${{ github.event.workflow_run.head_sha }}
-            ghcr.io/dekii2275/llm-superset-backend:latest
+            ghcr.io/${{ env.GHCR_NAMESPACE }}/llm-superset-backend:${{ steps.images.outputs.backend_tag }}
+            ghcr.io/${{ env.GHCR_NAMESPACE }}/llm-superset-backend:${{ github.event.workflow_run.head_sha }}
+            ghcr.io/${{ env.GHCR_NAMESPACE }}/llm-superset-backend:latest
 
       - name: Build and push frontend image
         if: steps.images.outputs.frontend_build == 'true'
@@ -88,16 +95,16 @@ jobs:
           context: ./frontend
           push: true
           cache-from: |
-            type=registry,ref=ghcr.io/dekii2275/llm-superset-frontend:buildcache
-            type=registry,ref=ghcr.io/dekii2275/llm-superset-frontend:latest
-          cache-to: type=registry,ref=ghcr.io/dekii2275/llm-superset-frontend:buildcache,mode=max
+            type=registry,ref=ghcr.io/${{ env.GHCR_NAMESPACE }}/llm-superset-frontend:buildcache
+            type=registry,ref=ghcr.io/${{ env.GHCR_NAMESPACE }}/llm-superset-frontend:latest
+          cache-to: type=registry,ref=ghcr.io/${{ env.GHCR_NAMESPACE }}/llm-superset-frontend:buildcache,mode=max
           build-args: |
-            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL || 'http://18.143.137.242:55200' }}
-            NEXT_PUBLIC_SUPERSET_URL=${{ vars.NEXT_PUBLIC_SUPERSET_URL || 'http://18.143.137.242:55200/superset' }}
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL || 'http://localhost:55200' }}
+            NEXT_PUBLIC_SUPERSET_URL=${{ vars.NEXT_PUBLIC_SUPERSET_URL || 'http://localhost:55200/superset' }}
           tags: |
-            ghcr.io/dekii2275/llm-superset-frontend:${{ steps.images.outputs.frontend_tag }}
-            ghcr.io/dekii2275/llm-superset-frontend:${{ github.event.workflow_run.head_sha }}
-            ghcr.io/dekii2275/llm-superset-frontend:latest
+            ghcr.io/${{ env.GHCR_NAMESPACE }}/llm-superset-frontend:${{ steps.images.outputs.frontend_tag }}
+            ghcr.io/${{ env.GHCR_NAMESPACE }}/llm-superset-frontend:${{ github.event.workflow_run.head_sha }}
+            ghcr.io/${{ env.GHCR_NAMESPACE }}/llm-superset-frontend:latest
 
       - name: Build and push Superset image
         if: steps.images.outputs.superset_build == 'true'
@@ -106,13 +113,13 @@ jobs:
           context: ./superset
           push: true
           cache-from: |
-            type=registry,ref=ghcr.io/dekii2275/llm-superset-superset:buildcache
-            type=registry,ref=ghcr.io/dekii2275/llm-superset-superset:latest
-          cache-to: type=registry,ref=ghcr.io/dekii2275/llm-superset-superset:buildcache,mode=max
+            type=registry,ref=ghcr.io/${{ env.GHCR_NAMESPACE }}/llm-superset-superset:buildcache
+            type=registry,ref=ghcr.io/${{ env.GHCR_NAMESPACE }}/llm-superset-superset:latest
+          cache-to: type=registry,ref=ghcr.io/${{ env.GHCR_NAMESPACE }}/llm-superset-superset:buildcache,mode=max
           tags: |
-            ghcr.io/dekii2275/llm-superset-superset:${{ steps.images.outputs.superset_tag }}
-            ghcr.io/dekii2275/llm-superset-superset:${{ github.event.workflow_run.head_sha }}
-            ghcr.io/dekii2275/llm-superset-superset:latest
+            ghcr.io/${{ env.GHCR_NAMESPACE }}/llm-superset-superset:${{ steps.images.outputs.superset_tag }}
+            ghcr.io/${{ env.GHCR_NAMESPACE }}/llm-superset-superset:${{ github.event.workflow_run.head_sha }}
+            ghcr.io/${{ env.GHCR_NAMESPACE }}/llm-superset-superset:latest
 
       - name: Tag reused images for this release
         env:
@@ -129,7 +136,7 @@ jobs:
             build_var="BUILD_$name"
             tag_var="${name}_TAG"
             if [ "${!build_var}" = false ]; then
-              image="ghcr.io/dekii2275/llm-superset-$service"
+              image="ghcr.io/$GHCR_NAMESPACE/llm-superset-$service"
               docker buildx imagetools create --tag "$image:$RELEASE_SHA" \
                 --tag "$image:latest" "$image:${!tag_var}"
             fi
@@ -148,6 +155,7 @@ jobs:
           APP_DB_NAME=ai_bi
           SUPERSET_DB_NAME=superset
           SUPERSET_SECRET_KEY=ci-smoke-secret-key-with-more-than-32-characters
+          JWT_SECRET_KEY=ci-smoke-jwt-key-with-more-than-32-characters
           SUPERSET_ADMIN_USERNAME=ciadmin
           SUPERSET_ADMIN_PASSWORD=ci_smoke_admin_password
           SUPERSET_ADMIN_EMAIL=ci@example.com
@@ -165,10 +173,10 @@ jobs:
           timeout --kill-after=15s 5m "${compose[@]}" pull backend frontend superset public-gateway
 
           if ! timeout --kill-after=15s 8m "${compose[@]}" up -d --no-build --wait --wait-timeout 420 \
-            backend frontend superset superset-mcp public-gateway; then
+            backend frontend superset superset-mcp superset-worker public-gateway; then
             echo "Candidate images failed Compose health checks." >&2
             "${compose[@]}" ps
-            "${compose[@]}" logs --tail=100 backend frontend superset-init superset superset-mcp public-gateway
+            "${compose[@]}" logs --tail=100 backend frontend superset-init superset superset-mcp superset-worker public-gateway
             exit 1
           fi
 
@@ -179,7 +187,7 @@ jobs:
             if [ "$status" != "200" ]; then
               echo "Expected HTTP 200 from $url, got ${status:-no response}." >&2
               "${compose[@]}" ps
-              "${compose[@]}" logs --tail=100 backend frontend superset-init superset superset-mcp public-gateway
+              "${compose[@]}" logs --tail=100 backend frontend superset-init superset superset-mcp superset-worker public-gateway
               return 1
             fi
           }
@@ -291,13 +299,13 @@ jobs:
             sleep "$delay"
           done
           if ! timeout --kill-after=15s 8m "${compose[@]}" up -d --no-build --wait --wait-timeout 420 \
-            backend frontend superset superset-mcp; then
+            backend frontend superset superset-mcp superset-worker; then
             echo "Deployment failed: Compose did not report all services healthy." >&2
             docker compose --env-file "$app_root/.env.prod" \
               -f docker-compose.yml -f docker-compose.prod.yml ps
             docker compose --env-file "$app_root/.env.prod" \
               -f docker-compose.yml -f docker-compose.prod.yml \
-              logs --tail=100 backend frontend superset-init superset superset-mcp public-gateway
+              logs --tail=100 backend frontend superset-init superset superset-mcp superset-worker public-gateway
             exit 1
           fi
           # Refresh Nginx's upstream DNS after changed application containers start.
@@ -311,7 +319,7 @@ jobs:
               --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:55200$endpoint" || true)"
             echo "$endpoint HTTP $status"
             if [ "$status" != 200 ]; then
-              "${compose[@]}" logs --tail=100 backend frontend superset-init superset superset-mcp public-gateway
+              "${compose[@]}" logs --tail=100 backend frontend superset-init superset superset-mcp superset-worker public-gateway
               exit 1
             fi
           done

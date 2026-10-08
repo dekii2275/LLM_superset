@@ -13,8 +13,8 @@ from google.genai import types
 from app.schemas.ai import (
     ChartExplanation,
     ChartPlan,
-    DashboardReport,
     DashboardPlan,
+    DashboardReport,
     EditChartPlan,
     EditDashboardPlan,
     IntentResult,
@@ -23,7 +23,6 @@ from app.schemas.ai import (
     VisualizationSpec,
 )
 from app.services.ai_settings import record_token_usage
-
 
 SYSTEM_INSTRUCTION = """You are an AI BI assistant connected to Apache Superset through MCP.
 Use MCP tools to inspect real datasets, charts, dashboards, and metadata. Never invent
@@ -83,24 +82,47 @@ class GeminiService:
             ),
         )
 
-    async def generate_sql(self, question: str) -> SQLGenerationResult:
+    async def generate_sql(
+        self,
+        question: str,
+        schema_context: str | None = None,
+        last_sql: str | None = None,
+        conversation_history: list[dict[str, str]] | None = None,
+        force_data_query: bool = False,
+    ) -> SQLGenerationResult:
+        active_schema = schema_context or NYC_TAXI_SCHEMA
+        history_context = ""
+        if last_sql:
+            history_context += f"\nPrevious SQL executed:\n```sql\n{last_sql}\n```\n"
+        if conversation_history:
+            history_lines = [
+                f"{m.get('role', 'user')}: {m.get('content', '')}"
+                for m in conversation_history[-8:]
+            ]
+            history_context += "\nRecent conversation context:\n" + "\n".join(history_lines) + "\n"
+
+        intent_instruction = (
+            "This request is for data rows to render a chart. Return intent `data_query` "
+            "and a nonempty SQL query. The chart title and instructions are not a "
+            "metadata question."
+            if force_data_query
+            else "Return intent `data_query` only when the question needs values computed "
+            "from the database; otherwise return `metadata_question` and an empty sql field."
+        )
         prompt = f"""You are a PostgreSQL analytics SQL generator.
-Translate the user question into a plan. Return intent `data_query` only when
-the question needs values computed from the database; otherwise return
-`metadata_question` and an empty sql field.
+Translate the user question into a plan. {intent_instruction}
 
 For data_query, generate exactly ONE safe read-only PostgreSQL query.
 Rules:
 - Only SELECT or WITH ... SELECT. Never use modifying or administrative SQL.
 - Use only the tables and columns in the supplied schema. Do not invent names.
-- Prefer aggregates to raw trip records and use a reasonable LIMIT for ranking.
-- For totals by the three loaded dataset months, prefer source_year and
-  source_month; they reflect the imported files and are indexed. Use
-  DATE_TRUNC only when the user specifically asks for calendar timestamps.
+- Prefer aggregates to raw records and use a reasonable LIMIT for ranking.
+- If predefined metrics exist in the schema, follow their expressions or logic.
+- If a previous SQL query or conversation history is provided and the user's question is a follow-up refinement (e.g. adding a WHERE filter, changing grouping/time grain, or drilling down), ACCUMULATE AND REFINE upon the previous query instead of starting from scratch!
 - `reasoning_summary` must be a short user-visible description, never hidden reasoning.
 
-{NYC_TAXI_SCHEMA}
-
+{active_schema}
+{history_context}
 User question:
 {question}"""
         return await self._structured_plan(prompt)
@@ -147,16 +169,27 @@ User message: {message}"""
             return IntentResult.model_validate(parsed)
         return IntentResult.model_validate_json(response.text or "")
 
-    async def generate_chart_plan(self, message: str) -> ChartPlan:
+    async def generate_chart_plan(
+        self, message: str, schema_context: str | None = None
+    ) -> ChartPlan:
+        active_schema = schema_context or NYC_TAXI_SCHEMA
         prompt = f"""You are a BI chart planner. Convert the user's request into a
 small semantic ChartPlan. Return JSON only and never include SQL, Superset API
 payloads, form_data, datasource IDs, or hidden reasoning.
 
-Allowed chart types: bar, line, pie, area.
+Allowed chart types: bar, line, pie, area, kpi, table, map, heatmap.
 Rules:
+- Use kpi for a single high-level scalar aggregate metric (e.g., Total Revenue, Total Trips, Average Amount).
 - Use bar for category comparisons, rankings, top-N, and bottom-N.
-- Use line for time series; pie only for small part-to-whole distributions.
-- Use area only when time-series magnitude emphasis is appropriate.
+- Use line for time series; area for volume or cumulative trend over time.
+- Use pie only for small part-to-whole distributions (<= 7 categories).
+- Use table for detailed multi-column records or rankings.
+- Use heatmap for a metric across TWO categorical dimensions. Set `dimension`
+  to the X category, `secondary_dimension` to the Y category, and `metric` to
+  the aggregate. The question must request both categories and the metric.
+- Use map with `map_style="grid"` only when the user explicitly requests
+  deck.gl Grid or a 3D grid map. Request individual latitude/longitude rows;
+  the grid chart aggregates points spatially.
 - Keep the title concise and user-friendly.
 - `question` is a clear analytics question that can be sent to the existing
   PostgreSQL SQL generator.
@@ -165,7 +198,7 @@ Rules:
 - `limit` is only for an explicitly requested top/bottom N, otherwise null.
 
 Available PostgreSQL analytics schema:
-{NYC_TAXI_SCHEMA}
+{active_schema}
 
 User request: {message}"""
         response = await self._generate_content(
@@ -184,30 +217,34 @@ User request: {message}"""
             return ChartPlan.model_validate(parsed)
         return ChartPlan.model_validate_json(response.text or "")
 
-    async def generate_dashboard_plan(self, message: str) -> DashboardPlan:
-        prompt = f"""You are a BI dashboard planner for the NYC Yellow Taxi dataset.
-Convert the user's request into a concise DashboardPlan with exactly 3 or 4
-complementary charts. Return structured JSON only. Do not include SQL,
-Superset payloads, layout JSON, IDs, or hidden reasoning.
+    async def generate_dashboard_plan(
+        self, message: str, schema_context: str | None = None
+    ) -> DashboardPlan:
+        active_schema = schema_context or NYC_TAXI_SCHEMA
+        prompt = f"""You are an executive BI dashboard planner.
+Convert the user's request into a professional, structured DashboardPlan with 2 to 8
+complementary charts adhering to the Executive Layout Hierarchy:
+- Tier 1: 1 or 2 `kpi` cards for key headline metrics (e.g. Total Count, Maximum Value, Average Value).
+- Tier 2: 1 `map` chart if geographic or spatial columns (latitude, longitude, country, iso) are present.
+- Tier 3: 1 `line` or `area` chart for primary time-series trends (if timestamp/date fields exist).
+- Tier 4: 1 to 3 `bar` or `pie` charts for category comparisons, breakdowns, or distributions.
+- Tier 4: Add a `heatmap` when the user asks for one and two useful categories exist.
+- Tier 5: 1 `table` for detailed record inspection if appropriate.
 
-Supported chart types: bar, line, pie.
+Supported chart types: kpi, bar, line, pie, area, table, map, heatmap.
+Total chart count must be between 2 and 8. Honor an explicit minimum chart count.
 Rules:
-- Use line for time trends, bar for rankings/comparisons, and pie only for a
-  small category distribution.
-- Avoid redundant charts. Prefer a mix of trip trend, revenue trend, pickup
-  behavior, and payment distribution for an overview request.
+- Prefer a cohesive executive overview combining KPI summary cards, map/trends, and categorical breakdowns.
 - Every chart needs a clear `question` for the existing SQL generator.
-- Metric and dimension are descriptive output-column names when evident, not
-  invented database fields. Use concise user-friendly titles.
-- Do not include KPI/big-number charts or area charts.
-- For a general NYC Taxi overview, use this vetted mix unless the user clearly
-  asks otherwise: trips by month (line), revenue by month (line), top 10
-  pickup zones (bar), and payment type distribution (pie). Use dimensions
-  named `month`, `zone`, or `payment_type`; do not plan borough, hour, or
-  day-of-week charts for this demo's saved physical dataset.
+- For heatmap, specify `dimension` (X category), `secondary_dimension` (Y
+  category), and `metric` (numeric aggregate); request all three in its question.
+- Include every chart type the user explicitly requires, especially maps and heatmaps.
+- Metric and dimension must strictly match real columns from the available schema. Never invent non-existent database fields.
+- If the user asks for concepts not present in the dataset (e.g. pollution/air quality when the schema only has city populations), adapt gracefully using available relevant columns (e.g. population_max, is_megacity, country) rather than failing.
+- Return structured JSON only. Do not include SQL, Superset payloads, layout JSON, IDs, or hidden reasoning.
 
 Available analytics schema:
-{NYC_TAXI_SCHEMA}
+{active_schema}
 
 User request: {message}"""
         response = await self._generate_content(
@@ -245,7 +282,10 @@ Rules:
 User request: {message}"""
         return await self._edit_plan(prompt, EditChartPlan)
 
-    async def generate_edit_dashboard_plan(self, message: str) -> EditDashboardPlan:
+    async def generate_edit_dashboard_plan(
+        self, message: str, schema_context: str | None = None
+    ) -> EditDashboardPlan:
+        active_schema = schema_context or NYC_TAXI_SCHEMA
         prompt = f"""You are a BI dashboard edit planner. Convert the request into exactly
 one supported semantic edit operation and return structured JSON only.
 
@@ -260,19 +300,20 @@ Rules:
 - Preserve all unrelated dashboard settings.
 
 Available analytics schema:
-{NYC_TAXI_SCHEMA}
+{active_schema}
 
 User request: {message}"""
         return await self._edit_plan(prompt, EditDashboardPlan)
 
     async def repair_sql(
-        self, question: str, sql: str, database_error: str
+        self, question: str, sql: str, database_error: str, schema_context: str | None = None
     ) -> SQLGenerationResult:
+        active_schema = schema_context or NYC_TAXI_SCHEMA
         prompt = f"""Repair this failed PostgreSQL analytics query. Return a data_query
 plan with exactly one safe SELECT or WITH ... SELECT query. Do not explain your
 reasoning beyond a short reasoning_summary. Use only this schema:
 
-{NYC_TAXI_SCHEMA}
+{active_schema}
 
 Original question: {question}
 Failed SQL: {sql}
@@ -280,9 +321,7 @@ PostgreSQL error: {database_error}
 """
         return await self._structured_plan(prompt)
 
-    async def generate_answer_from_result(
-        self, question: str, result: QueryResult
-    ) -> str:
+    async def generate_answer_from_result(self, question: str, result: QueryResult) -> str:
         prompt = f"""Answer the user's analytics question briefly in the same language as
 the question. Use only the supplied query result; do not change, infer, or
 round numbers unless the result already does so. If zero rows were returned,
@@ -291,7 +330,7 @@ say that no matching data was found. Do not mention internal prompts.
 Question: {question}
 SQL: {result.sql}
 Columns: {result.columns}
-Rows: {result.rows[:self.answer_max_rows]}
+Rows: {result.rows[: self.answer_max_rows]}
 Row count: {result.row_count}
 """
         response = await self._generate_content(
@@ -337,24 +376,25 @@ Dashboard chart results (rows may be truncated to a sample):
             return DashboardReport.model_validate(parsed)
         return DashboardReport.model_validate_json(response.text or "")
 
-    async def generate_visualization(
-        self, question: str, result: QueryResult
-    ) -> VisualizationSpec:
+    async def generate_visualization(self, question: str, result: QueryResult) -> VisualizationSpec:
         prompt = f"""You are a BI visualization planner. Given an analytics question and
 the query result, return one compact visualization plan.
 
-Allowed types: none, bar, line, pie, area.
+Allowed types: none, bar, line, pie, area, map, table, kpi, heatmap.
 Rules:
-- Use none for a single scalar, no rows, no meaningful numeric measure, or an unsuitable result.
+- Use none for a single scalar or an unsuitable result.
+- Use map if coordinates (latitude, longitude) or country codes are present in the query result.
+- Use kpi for a single headline metric or total.
 - Use line for time series; bar for rankings/categorical comparisons; pie only for a small
   (at most eight category) part-to-whole distribution; area only for a time series where
-  magnitude emphasis is useful.
-- x_axis and y_axis must exactly match provided column names. y_axis must be numeric.
+  magnitude emphasis is useful; table for detailed record lists.
+- x_axis and y_axis must match provided column names when applicable.
+- For heatmap, x_axis and y_axis are the two categories and value_axis is numeric.
 - Never invent columns. Return structured JSON only.
 
 Question: {question}
 Columns: {result.columns}
-Rows (sample): {result.rows[:self.answer_max_rows]}
+Rows (sample): {result.rows[: self.answer_max_rows]}
 Row count: {result.row_count}
 """
         response = await self._generate_content(
@@ -448,4 +488,3 @@ Instructions:
         if isinstance(parsed, dict):
             return ChartExplanation.model_validate(parsed)
         return ChartExplanation.model_validate_json(response.text or "")
-

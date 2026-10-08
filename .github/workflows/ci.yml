@@ -5,43 +5,69 @@ on:
     branches: [main]
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+
+      - name: Check repository artifacts
+        run: python3 scripts/check_repository.py
 
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
 
       - name: Install backend dependencies
-        run: python -m pip install -r backend/requirements.txt
+        run: python -m pip install -r backend/requirements-dev.txt
+
+      - name: Check Python style
+        run: |
+          python -m ruff check .
+          python -m ruff format --check .
 
       - name: Run backend tests
         env:
           DATABASE_URL: postgresql+psycopg://user:password@localhost:5432/ai_bi
           GEMINI_API_KEY: ci-placeholder-key
+          REDIS_URL: redis://127.0.0.1:6379/15
+          JWT_SECRET_KEY: ci-only-jwt-key-with-at-least-32-characters
           PYTHONPATH: backend
         run: python -m unittest discover -s backend/tests -v
 
       - uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Build frontend
+      - name: Check and build frontend
         working-directory: frontend
         env:
           NEXT_PUBLIC_API_URL: http://localhost:48123
           NEXT_PUBLIC_SUPERSET_URL: http://localhost:59088
         run: |
           npm ci
+          npm run format:check
+          npm run typecheck
+          npm test
           npm run build
+
+      - name: Validate Docker Compose templates
+        run: |
+          docker compose --env-file .env.example --profile app-containers config --quiet
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.prod.yml config --quiet

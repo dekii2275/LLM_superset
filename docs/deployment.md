@@ -19,6 +19,10 @@ chmod 600 .env.prod
 Generate unique values for all passwords and Superset secrets. Keep
 `POSTGRES_PASSWORD` URL-safe because it is also used in `DATABASE_URL`. Set
 `GEMINI_API_KEY` only on the server or in the deployment secret store.
+Set `JWT_SECRET_KEY` to a unique random value of at least 32 characters and
+`GHCR_NAMESPACE` to the lowercase GitHub owner of the published images.
+Enable `PUBLISH_ENABLED` in GitHub repository variables and publish images
+before using the production overlay, which pulls images from GHCR.
 
 ## 2. Configure public URLs
 
@@ -26,11 +30,11 @@ For IP-only access through the single public gateway port:
 
 ```dotenv
 APP_ENV=production
-FRONTEND_URL=http://18.143.137.242:55200
-FRONTEND_ORIGINS=http://18.143.137.242:55200
-NEXT_PUBLIC_API_URL=http://18.143.137.242:55200
-NEXT_PUBLIC_SUPERSET_URL=http://18.143.137.242:55200/superset
-SUPERSET_PUBLIC_URL=http://18.143.137.242:55200/superset
+FRONTEND_URL=http://<server-ip>:55200
+FRONTEND_ORIGINS=http://<server-ip>:55200
+NEXT_PUBLIC_API_URL=http://<server-ip>:55200
+NEXT_PUBLIC_SUPERSET_URL=http://<server-ip>:55200/superset
+SUPERSET_PUBLIC_URL=http://<server-ip>:55200/superset
 SUPERSET_APP_ROOT=/superset
 ENABLE_PROXY_FIX=true
 ```
@@ -100,9 +104,9 @@ routes:
 
 | Public host/path | Local upstream |
 | --- | --- |
-| `http://18.143.137.242:55200/` | Frontend container |
-| `http://18.143.137.242:55200/api/` | Backend container |
-| `http://18.143.137.242:55200/superset/` | Superset container |
+| `http://<server-ip>:55200/` | Frontend container |
+| `http://<server-ip>:55200/api/` | Backend container |
+| `http://<server-ip>:55200/superset/` | Superset container |
 
 Only the gateway port is public. Database, Redis, backend, Superset, and MCP
 host ports remain private. Do not proxy the MCP endpoint.
@@ -110,12 +114,12 @@ host ports remain private. Do not proxy the MCP endpoint.
 ## 6. Verify
 
 ```bash
-curl --fail http://18.143.137.242:55200/health
-curl --fail http://18.143.137.242:55200/superset/health
+curl --fail http://<server-ip>:55200/health
+curl --fail http://<server-ip>:55200/superset/health
 docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml ps
 ```
 
-Open the application at `http://18.143.137.242:55200/`, send a data question,
+Open the application at `http://<server-ip>:55200/`, send a data question,
 then open the embedded dashboard. If embedded Superset fails, confirm that
 `FRONTEND_URL` matches the browser origin and `SUPERSET_PUBLIC_URL` ends in
 `/superset`.

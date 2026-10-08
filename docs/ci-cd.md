@@ -1,8 +1,10 @@
 # CI/CD setup
 
-`ci.yml` runs the backend tests and builds the frontend on pull requests to
-`main`. After a successful CI run from a push to `main`, `cd.yml` publishes
-commit-tagged images to GHCR. It deploys them to the Ubuntu server over SSH
+`ci.yml` checks repository artifacts, Python lint/formatting, backend tests,
+frontend formatting/types/tests/build, and Compose templates on pull requests
+to `main` and pushes to `main`. It also supports manual runs. After a successful
+CI run from a push to `main`, `cd.yml` publishes commit-tagged images to GHCR
+when `PUBLISH_ENABLED=true`. It deploys them to the Ubuntu server over SSH
 when the repository variable `DEPLOY_ENABLED` is set to `true`.
 
 CD identifies backend, frontend, and Superset images by their Git directory tree;
@@ -54,25 +56,28 @@ Create the server environment file `.env.prod` from `.env.example`, set unique p
 secrets, and configure the public IP URLs:
 
 ```dotenv
-FRONTEND_URL=http://18.143.137.242:55200
-FRONTEND_ORIGINS=http://18.143.137.242:55200
-SUPERSET_PUBLIC_URL=http://18.143.137.242:55200/superset
+FRONTEND_URL=http://<server-ip>:55200
+FRONTEND_ORIGINS=http://<server-ip>:55200
+SUPERSET_PUBLIC_URL=http://<server-ip>:55200/superset
 SUPERSET_APP_ROOT=/superset
 ENABLE_PROXY_FIX=true
-NEXT_PUBLIC_API_URL=http://18.143.137.242:55200
-NEXT_PUBLIC_SUPERSET_URL=http://18.143.137.242:55200/superset
+NEXT_PUBLIC_API_URL=http://<server-ip>:55200
+NEXT_PUBLIC_SUPERSET_URL=http://<server-ip>:55200/superset
+GHCR_NAMESPACE=<lowercase-github-owner>
+JWT_SECRET_KEY=<unique-random-value-of-at-least-32-characters>
 ```
 
 The frontend URLs are baked into the GHCR image during its build. The CD
-workflow defaults them to this IP. Port `55200/TCP` is the only public port for
+workflow defaults them to localhost for a local demonstration. Set the GitHub
+variables to your actual server URLs before publishing. Port `55200/TCP` is the only public port for
 this project: the gateway routes `/` to the frontend, `/api/` to the backend,
 and `/superset/` to Superset. The database, Redis, and MCP ports stay private.
 If you change the IP, update the GitHub repository variables
 `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SUPERSET_URL`, then push a new commit.
 
-This IP-only endpoint uses plain HTTP and the app currently has no end-user
-authentication. Treat it as a demo endpoint; do not send passwords or sensitive
-data over it.
+This IP-only endpoint uses plain HTTP and the app has demo authentication with
+known demo passwords and some anonymous APIs. Replace the demo login, audit
+authorization, and configure TLS before exposing private data.
 
 Copy `.env.prod` with the supplied SSH key and restrict its permissions:
 
@@ -89,7 +94,7 @@ The images are private. Create a GitHub personal access token (classic) with
 
 ```bash
 read -rsp "GHCR read token: " GHCR_TOKEN
-printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u dekii2275 --password-stdin
+printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u <github-user> --password-stdin
 unset GHCR_TOKEN
 chmod 600 ~/.docker/config.json
 ```
@@ -111,7 +116,13 @@ these repository secrets:
 
 Add the repository variable `DEPLOY_ENABLED` with value `true` only after the
 server has Docker Compose, GHCR read access, and its `.env.prod` file. Until then,
-CI and image publishing still run but server deployment stays disabled.
+server deployment stays disabled. Set `PUBLISH_ENABLED=true` to enable image
+publishing; both publishing and deployment are disabled on a new repository.
+
+Set `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SUPERSET_URL` to the public server
+URLs. Images default to the lowercase repository owner; override
+`GHCR_NAMESPACE` only when publishing to another authorized owner, and set the
+same value in the server's `.env.prod`.
 
 Verify the server host-key fingerprint from a trusted connection before saving
 the host-key line as `DEPLOY_KNOWN_HOSTS`. This lets the workflow keep SSH host
@@ -119,18 +130,18 @@ verification enabled.
 
 ## Deploy and access
 
-Merge or push a commit to `main`. After CI passes, CD builds and pushes these
+With publishing enabled, merge or push a commit to `main`. After CI passes, CD builds and pushes these
 commit-tagged images to GHCR:
 
-- `ghcr.io/dekii2275/llm-superset-backend`
-- `ghcr.io/dekii2275/llm-superset-frontend`
-- `ghcr.io/dekii2275/llm-superset-superset`
+- `ghcr.io/<namespace>/llm-superset-backend`
+- `ghcr.io/<namespace>/llm-superset-frontend`
+- `ghcr.io/<namespace>/llm-superset-superset`
 
-Then GitHub Actions connects over SSH, updates the Compose files, runs
+When deployment is enabled, GitHub Actions connects over SSH, updates the Compose files, runs
 `docker compose pull`, and restarts the services with `--no-build`. The VM does
 not build the application images.
 
-Open `http://18.143.137.242:55200/`. For this project, only TCP port 55200 is
+Open `http://<server-ip>:55200/`. For this project, only TCP port 55200 is
 public; the gateway routes application paths to their internal containers.
-The app does not have end-user authentication and this IP endpoint uses plain
-HTTP, so treat it as a demo and do not send credentials or sensitive data.
+The app uses demo authentication and this IP endpoint uses plain HTTP, so treat
+it as a demo until authentication, authorization, and TLS are hardened.

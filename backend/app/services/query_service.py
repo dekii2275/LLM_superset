@@ -6,6 +6,9 @@ import asyncio
 import re
 import time
 from dataclasses import dataclass
+from datetime import date, datetime
+from datetime import time as clock_time
+from decimal import Decimal
 from typing import Iterator
 
 from sqlalchemy import Engine, text
@@ -148,6 +151,16 @@ def _tokens(sql: str) -> Iterator[_Token]:
 
 
 class QueryService:
+    @staticmethod
+    def _result_value(value: object) -> object:
+        # Keep chart measures numeric and date dimensions JSON-safe in both
+        # the live response and the persisted conversation.
+        if isinstance(value, Decimal):
+            return float(value) if value.is_finite() else None
+        if isinstance(value, (datetime, date, clock_time)):
+            return value.isoformat()
+        return value
+
     def __init__(
         self,
         engine: Engine = default_engine,
@@ -184,31 +197,69 @@ class QueryService:
             token.value == "select" and token.depth == 0 for token in scanned
         ):
             raise SQLValidationError("WITH queries must end in a top-level SELECT")
-        dangerous = next((token.value for token in scanned if token.value in _FORBIDDEN_KEYWORDS), None)
+        dangerous = next(
+            (token.value for token in scanned if token.value in _FORBIDDEN_KEYWORDS), None
+        )
         if dangerous:
             raise SQLValidationError(f"Read-only policy blocked keyword: {dangerous.upper()}")
 
         top_level = [token for token in scanned if token.depth == 0]
-        limit_index = next((index for index, token in enumerate(top_level) if token.value == "limit"), None)
+        limit_index = next(
+            (index for index, token in enumerate(top_level) if token.value == "limit"), None
+        )
         if limit_index is not None:
             next_token = top_level[limit_index + 1] if limit_index + 1 < len(top_level) else None
             if next_token and (next_token.value == "all" or next_token.value.isdigit()):
                 requested = self.max_limit if next_token.value == "all" else int(next_token.value)
                 if requested > self.max_limit:
-                    sql = f"{sql[:next_token.start]}{self.max_limit}{sql[next_token.end:]}"
+                    sql = f"{sql[: next_token.start]}{self.max_limit}{sql[next_token.end :]}"
             return sql
         if any(token.value == "fetch" for token in top_level):
             return sql
 
         offset = next((token for token in top_level if token.value == "offset"), None)
         if offset:
-            return f"{sql[:offset.start].rstrip()}\nLIMIT {self.default_limit}\n{sql[offset.start:]}"
+            return (
+                f"{sql[: offset.start].rstrip()}\nLIMIT {self.default_limit}\n{sql[offset.start :]}"
+            )
         return f"{sql.rstrip()}\nLIMIT {self.default_limit}"
 
     async def execute_query(self, sql: str) -> QueryResult:
         """Execute validated SQL in a read-only transaction without blocking FastAPI."""
         prepared_sql = self.prepare_sql(sql)
         return await asyncio.to_thread(self._execute_sync, prepared_sql)
+
+    def referenced_tables(self, sql: str) -> set[tuple[str, str]]:
+        """Ask PostgreSQL which physical relations a read-only preview uses."""
+        prepared_sql = self.prepare_sql(sql)
+        with self.engine.connect() as connection:
+            connection.execute(text("SET TRANSACTION READ ONLY"))
+            connection.execute(text(f"SET LOCAL statement_timeout = {self.timeout_ms}"))
+            explained = connection.execute(
+                text(f"EXPLAIN (FORMAT JSON, VERBOSE) {prepared_sql}")
+            ).scalar_one()
+            connection.rollback()
+
+        if isinstance(explained, str):
+            import json
+
+            explained = json.loads(explained)
+
+        relations: set[tuple[str, str]] = set()
+
+        def visit(node: object) -> None:
+            if isinstance(node, list):
+                for item in node:
+                    visit(item)
+            elif isinstance(node, dict):
+                if node.get("Relation Name"):
+                    relations.add((str(node.get("Schema") or ""), str(node["Relation Name"])))
+                for value in node.values():
+                    if isinstance(value, (dict, list)):
+                        visit(value)
+
+        visit(explained)
+        return relations
 
     def _execute_sync(self, sql: str) -> QueryResult:
         started = time.monotonic()
@@ -220,7 +271,10 @@ class QueryService:
                 connection.execute(text(f"SET LOCAL statement_timeout = {self.timeout_ms}"))
                 result = connection.execute(text(sql))
                 columns = list(result.keys())
-                rows = [dict(row._mapping) for row in result]
+                rows = [
+                    {key: self._result_value(value) for key, value in row._mapping.items()}
+                    for row in result
+                ]
                 connection.rollback()
             return QueryResult(
                 sql=sql,

@@ -22,4 +22,18 @@ fi
 
 echo "Initializing Superset roles and permissions..."
 superset init
+
+echo "Granting all_datasource_access to Gamma role for embedded guest tokens..."
+python -c "
+from superset.app import create_app
+app = create_app()
+with app.app_context():
+    from superset import security_manager
+    gamma = security_manager.find_role('Gamma')
+    pvm = security_manager.find_permission_view_menu('all_datasource_access', 'all_datasource_access')
+    if gamma and pvm and pvm not in gamma.permissions:
+        security_manager.add_permission_role(gamma, pvm)
+        print('Granted all_datasource_access to Gamma role.')
+"
+
 echo "Superset initialization complete."

@@ -1,6 +1,7 @@
 import os
 
 from sqlalchemy.engine import URL
+from superset.config import TALISMAN_CONFIG as DEFAULT_TALISMAN_CONFIG
 
 secret_key = os.environ["SUPERSET_SECRET_KEY"].strip()
 placeholder_secrets = {
@@ -46,8 +47,6 @@ MCP_SERVICE_PORT = 5008
 # Next.js frontend to host its embedded dashboard. Flask-Talisman would
 # otherwise add X-Frame-Options: SAMEORIGIN; disabling only that legacy header
 # lets the explicit CSP `frame-ancestors` allow-list control embedding.
-from superset.config import TALISMAN_CONFIG as DEFAULT_TALISMAN_CONFIG
-
 frontend_origins = [
     origin.strip().rstrip("/")
     for origin in os.environ.get(
@@ -89,6 +88,8 @@ def _register_dashboard_chart_screenshot_api(_app):
     from superset.utils.urls import get_url_path
     from superset.utils.webdriver import (
         app as superset_app,
+    )
+    from superset.utils.webdriver import (
         machine_auth_provider_factory,
         sync_playwright,
     )
@@ -140,9 +141,7 @@ def _register_dashboard_chart_screenshot_api(_app):
         pixel_density = superset_app.config["WEBDRIVER_WINDOW"].get("pixel_density", 1)
         chart_images = {}
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(
-                args=superset_app.config["WEBDRIVER_OPTION_ARGS"]
-            )
+            browser = playwright.chromium.launch(args=superset_app.config["WEBDRIVER_OPTION_ARGS"])
             try:
                 context = browser.new_context(
                     bypass_csp=True,
@@ -152,22 +151,16 @@ def _register_dashboard_chart_screenshot_api(_app):
                 context.set_default_timeout(
                     superset_app.config["SCREENSHOT_PLAYWRIGHT_DEFAULT_TIMEOUT"]
                 )
-                machine_auth_provider_factory.instance.authenticate_browser_context(
-                    context, g.user
-                )
+                machine_auth_provider_factory.instance.authenticate_browser_context(context, g.user)
                 page = context.new_page()
                 page.goto(
                     dashboard_url,
                     wait_until=superset_app.config["SCREENSHOT_PLAYWRIGHT_WAIT_EVENT"],
                 )
-                page.wait_for_timeout(
-                    superset_app.config["SCREENSHOT_SELENIUM_HEADSTART"] * 1000
-                )
+                page.wait_for_timeout(superset_app.config["SCREENSHOT_SELENIUM_HEADSTART"] * 1000)
 
                 for chart_id in chart_ids:
-                    chart = page.locator(
-                        f'.chart-slice[data-test-chart-id="{chart_id}"]'
-                    )
+                    chart = page.locator(f'.chart-slice[data-test-chart-id="{chart_id}"]')
                     chart.wait_for(state="visible")
                     container = chart.locator(".chart-container").first
                     container.wait_for(state="visible")
@@ -193,9 +186,9 @@ def _register_dashboard_chart_screenshot_api(_app):
         return self.response(200, result={"chart_images": chart_images})
 
     DashboardRestApi.chart_screenshots = chart_screenshots
-    DashboardRestApi.include_route_methods = (
-        set(DashboardRestApi.include_route_methods) | {"chart_screenshots"}
-    )
+    DashboardRestApi.include_route_methods = set(DashboardRestApi.include_route_methods) | {
+        "chart_screenshots"
+    }
     DashboardRestApi.method_permission_name = {
         **DashboardRestApi.method_permission_name,
         "chart_screenshots": "read",
@@ -205,6 +198,7 @@ def _register_dashboard_chart_screenshot_api(_app):
 FLASK_APP_MUTATOR = _register_dashboard_chart_screenshot_api
 
 redis_url = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+
 
 class CeleryConfig:
     broker_url = redis_url

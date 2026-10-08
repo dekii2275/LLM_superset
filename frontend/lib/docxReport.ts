@@ -1,10 +1,4 @@
-import {
-  Document,
-  HeadingLevel,
-  ImageRun,
-  Packer,
-  Paragraph,
-} from "docx";
+import { Document, HeadingLevel, ImageRun, Packer, Paragraph } from "docx";
 
 export type DashboardReport = {
   dashboard_title: string;
@@ -35,14 +29,16 @@ function chartImage(base64: string): Paragraph {
   const scale = Math.min(1, 600 / originalWidth, 680 / originalHeight);
 
   return new Paragraph({
-    children: [new ImageRun({
-      type: "png",
-      data: bytes,
-      transformation: {
-        width: Math.round(originalWidth * scale),
-        height: Math.round(originalHeight * scale),
-      },
-    })],
+    children: [
+      new ImageRun({
+        type: "png",
+        data: bytes,
+        transformation: {
+          width: Math.round(originalWidth * scale),
+          height: Math.round(originalHeight * scale),
+        },
+      }),
+    ],
   });
 }
 
@@ -52,9 +48,12 @@ export async function createDocxReport(report: DashboardReport): Promise<Blob> {
     new Paragraph({ text: "Báo cáo phân tích dashboard", heading: HeadingLevel.HEADING_1 }),
     new Paragraph({ text: `Tạo lúc ${new Date(report.generated_at).toLocaleString("vi-VN")}` }),
     new Paragraph({ text: `Tab: ${report.active_tab_title || "Dashboard"}` }),
-    new Paragraph({ text: report.applied_filters.length > 0
-      ? `Bộ lọc đang chọn: ${report.applied_filters.join("; ")}`
-      : "Không có bộ lọc đang chọn." }),
+    new Paragraph({
+      text:
+        report.applied_filters.length > 0
+          ? `Bộ lọc đang chọn: ${report.applied_filters.join("; ")}`
+          : "Không có bộ lọc đang chọn.",
+    }),
     new Paragraph({ text: "Tổng quan", heading: HeadingLevel.HEADING_2 }),
     new Paragraph(report.analysis.overview),
   ];
@@ -74,7 +73,11 @@ export async function createDocxReport(report: DashboardReport): Promise<Blob> {
     }
 
     if (chart.truncated) {
-      children.push(new Paragraph(`Biểu đồ hiển thị ${chart.rows.length} dòng mẫu trên tổng số ${chart.row_count} dòng.`));
+      children.push(
+        new Paragraph(
+          `Biểu đồ hiển thị ${chart.rows.length} dòng mẫu trên tổng số ${chart.row_count} dòng.`,
+        ),
+      );
     }
   }
 

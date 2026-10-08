@@ -6,7 +6,17 @@ export type ToolCall = {
   summary?: string | null;
 };
 
-export type VisualizationType = "none" | "bar" | "line" | "pie" | "area";
+export type VisualizationType =
+  | "none"
+  | "bar"
+  | "line"
+  | "pie"
+  | "area"
+  | "kpi"
+  | "table"
+  | "scatter"
+  | "map"
+  | "heatmap";
 
 export type AIIntent =
   | "ASK_DATA"
@@ -16,13 +26,31 @@ export type AIIntent =
   | "EDIT_DASHBOARD"
   | "GENERAL";
 
+export type DatasetSummary = {
+  id: number;
+  table_name: string;
+  name: string;
+  schema_name?: string | null;
+  description?: string | null;
+  column_count: number;
+  metric_count: number;
+  columns: string[];
+  metrics: string[];
+  default_dashboard_id?: number | null;
+  default_dashboard_title?: string | null;
+};
+
 export type AIChatContext = {
   active_dashboard_id?: number | null;
   active_dashboard_title?: string | null;
   active_chart_id?: number | null;
   active_chart_title?: string | null;
+  dataset_id?: number | null;
+  session_id?: string | null;
+  conversation_history?: Array<{ role: string; content: string }> | null;
   last_query?: QueryResult | null;
   last_visualization?: VisualizationSpec | null;
+  pending_dashboard_plan?: DashboardPlan | null;
 };
 
 export type IntentInfo = {
@@ -43,18 +71,22 @@ export type AIActionPlan = {
 
 export type ChartPlan = {
   title: string;
-  chart_type: "bar" | "line" | "pie" | "area";
+  chart_type: "bar" | "line" | "pie" | "area" | "kpi" | "table" | "scatter" | "map" | "heatmap";
+  map_style?: "grid" | "scatter" | null;
   question: string;
   metric?: string | null;
   dimension?: string | null;
+  secondary_dimension?: string | null;
   limit?: number | null;
   sort?: string | null;
+  dataset_id?: number | null;
 };
 
 export type DashboardPlan = {
   title: string;
   description?: string | null;
   charts: ChartPlan[];
+  dataset_id?: number | null;
 };
 
 export type PendingCreateChartAction = {
@@ -70,7 +102,11 @@ export type PendingCreateDashboardAction = {
   requires_confirmation: boolean;
 };
 
-export type EditChartOperation = "CHANGE_CHART_TYPE" | "RENAME_CHART" | "CHANGE_METRIC" | "CHANGE_DIMENSION";
+export type EditChartOperation =
+  | "CHANGE_CHART_TYPE"
+  | "RENAME_CHART"
+  | "CHANGE_METRIC"
+  | "CHANGE_DIMENSION";
 export type EditDashboardOperation = "ADD_CHART" | "REMOVE_CHART" | "RENAME_DASHBOARD";
 
 export type EditChartPlan = {
@@ -78,7 +114,7 @@ export type EditChartPlan = {
   chart_name?: string | null;
   operation: EditChartOperation;
   new_title?: string | null;
-  new_chart_type?: "bar" | "line" | "pie" | null;
+  new_chart_type?: "bar" | "line" | "pie" | "area" | "kpi" | "table" | "scatter" | "map" | null;
   new_metric?: string | null;
   new_dimension?: string | null;
 };
@@ -93,8 +129,16 @@ export type EditDashboardPlan = {
   create_chart_plan?: ChartPlan | null;
 };
 
-export type PendingEditChartAction = { action: "EDIT_CHART"; edit_chart_plan: EditChartPlan; requires_confirmation: boolean };
-export type PendingEditDashboardAction = { action: "EDIT_DASHBOARD"; edit_dashboard_plan: EditDashboardPlan; requires_confirmation: boolean };
+export type PendingEditChartAction = {
+  action: "EDIT_CHART";
+  edit_chart_plan: EditChartPlan;
+  requires_confirmation: boolean;
+};
+export type PendingEditDashboardAction = {
+  action: "EDIT_DASHBOARD";
+  edit_dashboard_plan: EditDashboardPlan;
+  requires_confirmation: boolean;
+};
 
 export type CreateChartResult = {
   success: boolean;
@@ -126,9 +170,11 @@ export type ActionExecutionResponse = {
 
 export type VisualizationSpec = {
   type: VisualizationType;
+  map_style?: "grid" | "scatter" | null;
   title?: string | null;
   x_axis?: string | null;
   y_axis?: string | null;
+  value_axis?: string | null;
   x_label?: string | null;
   y_label?: string | null;
 };
@@ -148,6 +194,35 @@ export type ChartExplanation = {
   note: string;
 };
 
+export type RlsRuleItem = {
+  dataset_id: number;
+  filter_clause: string;
+  description?: string | null;
+};
+
+export type UserProfile = {
+  id: number;
+  username: string;
+  display_name: string;
+  role: string;
+  is_active?: boolean;
+  rls_rules: RlsRuleItem[];
+};
+
+export type AlertItem = {
+  id: number;
+  dataset_id?: number | null;
+  alert_type: string;
+  severity: "info" | "warning" | "critical";
+  title: string;
+  message: string;
+  metric_name?: string | null;
+  change_percent?: number | null;
+  suggested_query?: string | null;
+  is_read: boolean;
+  created_at?: string | null;
+};
+
 export type ChatMessage = {
   id: string;
   role: MessageRole;
@@ -157,9 +232,18 @@ export type ChatMessage = {
   intent?: IntentInfo | null;
   actionPlan?: AIActionPlan | null;
   dashboardPlan?: DashboardPlan | null;
-  pendingAction?: PendingCreateChartAction | PendingCreateDashboardAction | PendingEditChartAction | PendingEditDashboardAction | null;
+  pendingAction?:
+    | PendingCreateChartAction
+    | PendingCreateDashboardAction
+    | PendingEditChartAction
+    | PendingEditDashboardAction
+    | null;
   query?: QueryResult | null;
   visualization?: VisualizationSpec | null;
+  cached?: boolean;
+  cache_type?: string | null;
+  cache_latency_ms?: number | null;
+  applied_rls_filter?: string | null;
 };
 
 export type AIChatResponse = {
@@ -170,9 +254,19 @@ export type AIChatResponse = {
   dashboard_plan?: DashboardPlan | null;
   edit_chart_plan?: EditChartPlan | null;
   edit_dashboard_plan?: EditDashboardPlan | null;
-  pending_action?: PendingCreateChartAction | PendingCreateDashboardAction | PendingEditChartAction | PendingEditDashboardAction | null;
+  pending_action?:
+    | PendingCreateChartAction
+    | PendingCreateDashboardAction
+    | PendingEditChartAction
+    | PendingEditDashboardAction
+    | null;
   query?: QueryResult | null;
   visualization?: VisualizationSpec | null;
+  session_id?: string | null;
+  cached?: boolean;
+  cache_type?: string | null;
+  cache_latency_ms?: number | null;
+  applied_rls_filter?: string | null;
 };
 
 export type SupersetChartItem = {
@@ -191,3 +285,69 @@ export type SupersetChartExplanationResponse = {
   explanation: ChartExplanation;
 };
 
+export type DatasetColumnMeta = {
+  name: string;
+  type: string;
+  sample?: string[];
+};
+
+export type UploadDatasetResult = {
+  dataset_id?: number | null;
+  table_name: string;
+  row_count: number;
+  column_count: number;
+  columns: DatasetColumnMeta[];
+  sample_rows: Record<string, unknown>[];
+  description?: string;
+};
+
+export type DatasetPreviewResult = {
+  table_name: string;
+  total_rows: number;
+  column_count: number;
+  columns: { name: string; type: string }[];
+  rows: Record<string, unknown>[];
+};
+
+export type DashboardOption = {
+  id: number;
+  title: string;
+  slug: string;
+};
+
+export type BusinessGlossaryItem = {
+  id?: number;
+  dataset_id: number;
+  term: string;
+  target_type: "column" | "metric" | "filter" | string;
+  target_name: string;
+  description?: string | null;
+  created_at?: string | null;
+};
+
+export type VerifiedMetricItem = {
+  id?: number;
+  dataset_id: number;
+  metric_name: string;
+  display_name: string;
+  sql_expression: string;
+  description?: string | null;
+  created_at?: string | null;
+};
+
+export type ChatSession = {
+  id: string;
+  title: string;
+  dataset_id?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type DbChatMessage = {
+  id?: number;
+  session_id: string;
+  sender: "user" | "assistant";
+  content: string;
+  metadata?: Record<string, unknown> | null;
+  created_at?: string | null;
+};

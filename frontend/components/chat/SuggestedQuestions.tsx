@@ -15,9 +15,18 @@ export function SuggestedQuestions({ onSelect, disabled }: SuggestedQuestionsPro
   return (
     <div className="suggestion-grid" aria-label="Câu hỏi gợi ý">
       {SUGGESTED_QUESTIONS.map((question, index) => (
-        <button className="suggestion-card" type="button" onClick={() => onSelect(question)} disabled={disabled} key={question}>
+        <button
+          className="suggestion-card"
+          type="button"
+          onClick={() => onSelect(question)}
+          disabled={disabled}
+          key={question}
+        >
           <span className={`suggestion-icon suggestion-icon-${(index % 4) + 1}`}>
-            <Icon name={index === 1 || index === 2 ? "chart" : index === 3 ? "database" : "sparkle"} size={16} />
+            <Icon
+              name={index === 1 || index === 2 ? "chart" : index === 3 ? "database" : "sparkle"}
+              size={16}
+            />
           </span>
           <span>{question}</span>
           <Icon className="suggestion-arrow" name="arrow-up-right" size={15} />

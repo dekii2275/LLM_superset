@@ -1,0 +1,7 @@
+Dataset: Natural Earth 1:110m Populated Places (simple, reduced columns)
+Source version: 5.1.2
+Official download: https://naturalearth.s3.amazonaws.com/110m_cultural/ne_110m_populated_places_simple.zip
+Dataset page: https://www.naturalearthdata.com/downloads/110m-cultural-vectors/110m-populated-places/
+License: public domain (Natural Earth)
+Rows exported: 243
+CSV fields include place/country names, ISO alpha-2 code, latitude/longitude, population estimate, capital and megacity flags.
