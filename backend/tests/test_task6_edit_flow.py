@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock, patch
 
 from app.api.ai import execute_action
 from app.schemas.ai import (
+    ActionExecutionRequest,
     AIChatContext,
     AIIntent,
-    ActionExecutionRequest,
     ChartPlan,
     EditChartOperation,
     EditChartPlan,
@@ -34,7 +34,8 @@ class EditPreviewTests(unittest.IsolatedAsyncioTestCase):
     async def test_edit_chart_preview_uses_trusted_context_and_never_writes(self):
         service = AIBIService(object(), EditGemini(), object())
         response = await service.chat(
-            "Change this chart to bar", AIChatContext(active_chart_id=12, active_chart_title="Monthly Trip Volume")
+            "Change this chart to bar",
+            AIChatContext(active_chart_id=12, active_chart_title="Monthly Trip Volume"),
         )
         self.assertEqual(response.pending_action.action, "EDIT_CHART")
         self.assertEqual(response.pending_action.edit_chart_plan.chart_id, 12)
@@ -42,7 +43,9 @@ class EditPreviewTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_unsupported_chart_type_is_a_safe_preview_error(self):
         service = AIBIService(object(), EditGemini(), object())
-        response = await service.chat("Change this chart to a scatter plot", AIChatContext(active_chart_id=12))
+        response = await service.chat(
+            "Change this chart to a scatter plot", AIChatContext(active_chart_id=12)
+        )
         self.assertIsNone(response.pending_action)
         self.assertIn("bar", response.answer)
 
@@ -98,8 +101,15 @@ class EditPreviewTests(unittest.IsolatedAsyncioTestCase):
 
 class EditExecutionBoundaryTests(unittest.IsolatedAsyncioTestCase):
     async def test_execute_edit_chart_calls_semantic_writer_only(self):
-        plan = EditChartPlan(chart_id=12, operation=EditChartOperation.RENAME_CHART, new_title="Monthly Taxi Demand")
-        result = UpdateChartResult(success=True, chart_id=12, chart_name="Monthly Taxi Demand", message="Chart updated successfully.")
+        plan = EditChartPlan(
+            chart_id=12, operation=EditChartOperation.RENAME_CHART, new_title="Monthly Taxi Demand"
+        )
+        result = UpdateChartResult(
+            success=True,
+            chart_id=12,
+            chart_name="Monthly Taxi Demand",
+            message="Chart updated successfully.",
+        )
         request = ActionExecutionRequest(action=AIIntent.EDIT_CHART, edit_chart_plan=plan)
         with patch("app.api.ai.SupersetWriteService") as writer:
             writer.return_value.edit_chart = AsyncMock(return_value=result)
@@ -110,20 +120,31 @@ class EditExecutionBoundaryTests(unittest.IsolatedAsyncioTestCase):
 
 class DashboardLayoutTests(unittest.TestCase):
     def test_layout_supports_five_charts_as_three_rows(self):
-        charts = [{"id": index, "slice_name": f"Chart {index}", "uuid": str(index)} for index in range(1, 6)]
+        charts = [
+            {"id": index, "slice_name": f"Chart {index}", "uuid": str(index)}
+            for index in range(1, 6)
+        ]
         layout = SupersetWriteService.build_dashboard_layout("Demo", charts)
         self.assertEqual(layout["GRID_ID"]["children"], ["ROW-1", "ROW-2", "ROW-3"])
         self.assertEqual(layout["ROW-3"]["children"], ["CHART-5"])
 
     def test_layout_supports_more_than_six_charts(self):
-        charts = [{"id": index, "slice_name": f"Chart {index}", "uuid": str(index)} for index in range(1, 10)]
+        charts = [
+            {"id": index, "slice_name": f"Chart {index}", "uuid": str(index)}
+            for index in range(1, 10)
+        ]
         layout = SupersetWriteService.build_dashboard_layout("Demo", charts)
-        self.assertEqual(layout["GRID_ID"]["children"], ["ROW-1", "ROW-2", "ROW-3", "ROW-4", "ROW-5"])
+        self.assertEqual(
+            layout["GRID_ID"]["children"], ["ROW-1", "ROW-2", "ROW-3", "ROW-4", "ROW-5"]
+        )
         self.assertEqual(layout["ROW-4"]["children"], ["CHART-7", "CHART-8"])
         self.assertEqual(layout["ROW-5"]["children"], ["CHART-9"])
 
     def test_new_chart_is_appended_without_rebuilding_existing_layout(self):
-        existing_charts = [{"id": index, "slice_name": f"Chart {index}", "uuid": str(index)} for index in range(1, 5)]
+        existing_charts = [
+            {"id": index, "slice_name": f"Chart {index}", "uuid": str(index)}
+            for index in range(1, 5)
+        ]
         layout = SupersetWriteService.build_dashboard_layout("Demo", existing_charts)
         layout["CHART-1"]["meta"]["width"] = 7
         dashboard = {"position_json": json.dumps(layout)}

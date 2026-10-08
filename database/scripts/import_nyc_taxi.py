@@ -14,26 +14,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import pyarrow.parquet as pq
 import psycopg
-from psycopg import sql
-
+import pyarrow.parquet as pq
 from nyc_taxi_common import (
     DATA_DIR,
     INGESTION_TABLE,
-    RESERVED_TRIP_COLUMNS,
     TRIPS_TABLE,
     ZONE_TABLE,
     adapt_csv_value,
     adapt_parquet_value,
     combined_trip_schema,
     connect,
-    normalize_identifier,
     parquet_files,
     read_csv_schema,
     zone_file,
 )
-
+from psycopg import sql
 
 SCHEMA = "raw"
 BATCH_SIZE = 20_000
@@ -76,9 +72,11 @@ def ensure_trips_table(cur: psycopg.Cursor[Any], schema_fields: list[dict[str, A
             sql.SQL("loaded_at TIMESTAMPTZ NOT NULL"),
         ]
     )
-    cur.execute(sql.SQL("CREATE TABLE IF NOT EXISTS {}.{} ({})").format(
-        sql.Identifier(SCHEMA), sql.Identifier(TRIPS_TABLE), sql.SQL(", ").join(definitions)
-    ))
+    cur.execute(
+        sql.SQL("CREATE TABLE IF NOT EXISTS {}.{} ({})").format(
+            sql.Identifier(SCHEMA), sql.Identifier(TRIPS_TABLE), sql.SQL(", ").join(definitions)
+        )
+    )
 
     cur.execute(
         "SELECT column_name, data_type, udt_name FROM information_schema.columns "
@@ -90,8 +88,10 @@ def ensure_trips_table(cur: psycopg.Cursor[Any], schema_fields: list[dict[str, A
         if field["column"] not in existing:
             cur.execute(
                 sql.SQL("ALTER TABLE {}.{} ADD COLUMN {} {}").format(
-                    sql.Identifier(SCHEMA), sql.Identifier(TRIPS_TABLE),
-                    sql.Identifier(field["column"]), sql.SQL(field["postgres_type"]),
+                    sql.Identifier(SCHEMA),
+                    sql.Identifier(TRIPS_TABLE),
+                    sql.Identifier(field["column"]),
+                    sql.SQL(field["postgres_type"]),
                 )
             )
     metadata_types = {
@@ -104,7 +104,10 @@ def ensure_trips_table(cur: psycopg.Cursor[Any], schema_fields: list[dict[str, A
         if column not in existing:
             cur.execute(
                 sql.SQL("ALTER TABLE {}.{} ADD COLUMN {} {}").format(
-                    sql.Identifier(SCHEMA), sql.Identifier(TRIPS_TABLE), sql.Identifier(column), sql.SQL(pg_type)
+                    sql.Identifier(SCHEMA),
+                    sql.Identifier(TRIPS_TABLE),
+                    sql.Identifier(column),
+                    sql.SQL(pg_type),
                 )
             )
 
@@ -114,9 +117,11 @@ def ensure_zone_table(cur: psycopg.Cursor[Any], columns: list[dict[str, Any]]) -
         sql.SQL("{} {}").format(sql.Identifier(column["column"]), sql.SQL(column["postgres_type"]))
         for column in columns
     ]
-    cur.execute(sql.SQL("CREATE TABLE IF NOT EXISTS {}.{} ({})").format(
-        sql.Identifier(SCHEMA), sql.Identifier(ZONE_TABLE), sql.SQL(", ").join(definitions)
-    ))
+    cur.execute(
+        sql.SQL("CREATE TABLE IF NOT EXISTS {}.{} ({})").format(
+            sql.Identifier(SCHEMA), sql.Identifier(ZONE_TABLE), sql.SQL(", ").join(definitions)
+        )
+    )
     cur.execute(
         "SELECT column_name FROM information_schema.columns WHERE table_schema=%s AND table_name=%s",
         (SCHEMA, ZONE_TABLE),
@@ -126,8 +131,10 @@ def ensure_zone_table(cur: psycopg.Cursor[Any], columns: list[dict[str, Any]]) -
         if column["column"] not in existing:
             cur.execute(
                 sql.SQL("ALTER TABLE {}.{} ADD COLUMN {} {}").format(
-                    sql.Identifier(SCHEMA), sql.Identifier(ZONE_TABLE),
-                    sql.Identifier(column["column"]), sql.SQL(column["postgres_type"]),
+                    sql.Identifier(SCHEMA),
+                    sql.Identifier(ZONE_TABLE),
+                    sql.Identifier(column["column"]),
+                    sql.SQL(column["postgres_type"]),
                 )
             )
 
@@ -170,13 +177,22 @@ def log_failure(path: Path, source_type: str, file_hash: str, error: BaseExcepti
                     "file_size=EXCLUDED.file_size, sha256=EXCLUDED.sha256, loaded_at=EXCLUDED.loaded_at, "
                     "status='failed', error=EXCLUDED.error"
                 ).format(sql.Identifier(SCHEMA), sql.Identifier(INGESTION_TABLE)),
-                (path.name, source_type, path.stat().st_size, file_hash, datetime.now(timezone.utc), str(error)[:4000]),
+                (
+                    path.name,
+                    source_type,
+                    path.stat().st_size,
+                    file_hash,
+                    datetime.now(timezone.utc),
+                    str(error)[:4000],
+                ),
             )
     except Exception as log_error:
         print(f"Could not record failed ingestion for {path.name}: {log_error}", file=sys.stderr)
 
 
-def log_success(cur: psycopg.Cursor[Any], path: Path, source_type: str, row_count: int, file_hash: str) -> None:
+def log_success(
+    cur: psycopg.Cursor[Any], path: Path, source_type: str, row_count: int, file_hash: str
+) -> None:
     cur.execute(
         sql.SQL(
             "INSERT INTO {}.{} (source_file, source_type, row_count, file_size, sha256, loaded_at, status, error) "
@@ -185,7 +201,14 @@ def log_success(cur: psycopg.Cursor[Any], path: Path, source_type: str, row_coun
             "row_count=EXCLUDED.row_count, file_size=EXCLUDED.file_size, sha256=EXCLUDED.sha256, "
             "loaded_at=EXCLUDED.loaded_at, status='success', error=NULL"
         ).format(sql.Identifier(SCHEMA), sql.Identifier(INGESTION_TABLE)),
-        (path.name, source_type, row_count, path.stat().st_size, file_hash, datetime.now(timezone.utc)),
+        (
+            path.name,
+            source_type,
+            row_count,
+            path.stat().st_size,
+            file_hash,
+            datetime.now(timezone.utc),
+        ),
     )
 
 
@@ -202,14 +225,24 @@ def ingest_parquet(
     parquet = pq.ParquetFile(path)
     actual_rows = parquet.metadata.num_rows
     sample_stride = (
-        max(1, math.ceil(actual_rows / max_rows_per_source))
-        if max_rows_per_source > 0
-        else 1
+        max(1, math.ceil(actual_rows / max_rows_per_source)) if max_rows_per_source > 0 else 1
     )
-    source_to_normalized = {source: normalized for field in schema_fields for source in field["source_names"] for normalized in [field["column"]]}
+    source_to_normalized = {
+        source: normalized
+        for field in schema_fields
+        for source in field["source_names"]
+        for normalized in [field["column"]]
+    }
     normalized_types = {field["column"]: field["postgres_type"] for field in schema_fields}
-    source_fields = [(field.name, source_to_normalized[field.name]) for field in parquet.schema_arrow]
-    copy_columns = [normalized for _, normalized in source_fields] + ["source_file", "source_year", "source_month", "loaded_at"]
+    source_fields = [
+        (field.name, source_to_normalized[field.name]) for field in parquet.schema_arrow
+    ]
+    copy_columns = [normalized for _, normalized in source_fields] + [
+        "source_file",
+        "source_year",
+        "source_month",
+        "loaded_at",
+    ]
     copied = 0
     seen = 0
 
@@ -218,12 +251,15 @@ def ingest_parquet(
         ensure_ingestion_log(cur)
         ensure_trips_table(cur, schema_fields)
         cur.execute(
-            sql.SQL("DELETE FROM {}.{} WHERE source_file=%s").format(sql.Identifier(SCHEMA), sql.Identifier(TRIPS_TABLE)),
+            sql.SQL("DELETE FROM {}.{} WHERE source_file=%s").format(
+                sql.Identifier(SCHEMA), sql.Identifier(TRIPS_TABLE)
+            ),
             (path.name,),
         )
         loaded_at = datetime.now(timezone.utc)
         copy_query = sql.SQL("COPY {}.{} ({}) FROM STDIN").format(
-            sql.Identifier(SCHEMA), sql.Identifier(TRIPS_TABLE),
+            sql.Identifier(SCHEMA),
+            sql.Identifier(TRIPS_TABLE),
             sql.SQL(", ").join(map(sql.Identifier, copy_columns)),
         )
         with cur.copy(copy_query) as copy:
@@ -235,49 +271,73 @@ def ingest_parquet(
                     # rows for a local demo. Set 0 to import every source row.
                     if (seen - 1) % sample_stride != 0:
                         continue
-                    values = [adapt_parquet_value(row.get(source), normalized_types[normalized]) for source, normalized in source_fields]
+                    values = [
+                        adapt_parquet_value(row.get(source), normalized_types[normalized])
+                        for source, normalized in source_fields
+                    ]
                     values.extend([path.name, source_year, source_month, loaded_at])
                     copy.write_row(values)
                     copied += 1
                 print(f"  {path.name}: sampled {copied:,}/{actual_rows:,} rows", flush=True)
         cur.execute(
-            sql.SQL("SELECT COUNT(*) FROM {}.{} WHERE source_file=%s").format(sql.Identifier(SCHEMA), sql.Identifier(TRIPS_TABLE)),
+            sql.SQL("SELECT COUNT(*) FROM {}.{} WHERE source_file=%s").format(
+                sql.Identifier(SCHEMA), sql.Identifier(TRIPS_TABLE)
+            ),
             (path.name,),
         )
         inserted = cur.fetchone()[0]
         if inserted != copied:
-            raise RuntimeError(f"PostgreSQL has {inserted:,} rows for {path.name}; expected {copied:,}")
+            raise RuntimeError(
+                f"PostgreSQL has {inserted:,} rows for {path.name}; expected {copied:,}"
+            )
         log_success(cur, path, "parquet", inserted, file_hash)
     return copied
 
 
-def ingest_zone_csv(path: Path, columns: list[dict[str, Any]], expected_rows: int, file_hash: str) -> int:
-    source_to_normalized = {column["source_name"]: column["column"] for column in columns}
+def ingest_zone_csv(
+    path: Path, columns: list[dict[str, Any]], expected_rows: int, file_hash: str
+) -> int:
     pg_types = {column["column"]: column["postgres_type"] for column in columns}
     copied = 0
     with connect() as conn, conn.cursor() as cur:
         cur.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(sql.Identifier(SCHEMA)))
         ensure_ingestion_log(cur)
         ensure_zone_table(cur, columns)
-        cur.execute(sql.SQL("TRUNCATE TABLE {}.{}").format(sql.Identifier(SCHEMA), sql.Identifier(ZONE_TABLE)))
+        cur.execute(
+            sql.SQL("TRUNCATE TABLE {}.{}").format(
+                sql.Identifier(SCHEMA), sql.Identifier(ZONE_TABLE)
+            )
+        )
         copy_query = sql.SQL("COPY {}.{} ({}) FROM STDIN").format(
-            sql.Identifier(SCHEMA), sql.Identifier(ZONE_TABLE),
+            sql.Identifier(SCHEMA),
+            sql.Identifier(ZONE_TABLE),
             sql.SQL(", ").join(sql.Identifier(column["column"]) for column in columns),
         )
-        with path.open("r", encoding="utf-8-sig", newline="") as stream, cur.copy(copy_query) as copy:
+        with (
+            path.open("r", encoding="utf-8-sig", newline="") as stream,
+            cur.copy(copy_query) as copy,
+        ):
             reader = csv.DictReader(stream)
             for row in reader:
-                copy.write_row([
-                    adapt_csv_value(row.get(column["source_name"]), pg_types[column["column"]])
-                    for column in columns
-                ])
+                copy.write_row(
+                    [
+                        adapt_csv_value(row.get(column["source_name"]), pg_types[column["column"]])
+                        for column in columns
+                    ]
+                )
                 copied += 1
         if copied != expected_rows:
             raise RuntimeError(f"CSV has {expected_rows:,} rows but streamed {copied:,}")
-        cur.execute(sql.SQL("SELECT COUNT(*) FROM {}.{}").format(sql.Identifier(SCHEMA), sql.Identifier(ZONE_TABLE)))
+        cur.execute(
+            sql.SQL("SELECT COUNT(*) FROM {}.{}").format(
+                sql.Identifier(SCHEMA), sql.Identifier(ZONE_TABLE)
+            )
+        )
         inserted = cur.fetchone()[0]
         if inserted != expected_rows:
-            raise RuntimeError(f"PostgreSQL has {inserted:,} rows in taxi zone lookup; expected {expected_rows:,}")
+            raise RuntimeError(
+                f"PostgreSQL has {inserted:,} rows in taxi zone lookup; expected {expected_rows:,}"
+            )
         log_success(cur, path, "csv", inserted, file_hash)
     return copied
 
@@ -287,14 +347,23 @@ def create_exploration_indexes(schema_fields: list[dict[str, Any]]) -> list[str]
     index_columns: list[tuple[str, ...]] = []
     # The schema inspection is source-driven; only add indexes for columns that exist.
     timestamp_columns = [
-        field["column"] for field in schema_fields
+        field["column"]
+        for field in schema_fields
         if field["postgres_type"].startswith("TIMESTAMP")
         and ("pickup" in field["column"] or "dropoff" in field["column"])
     ]
     for column in timestamp_columns:
         index_columns.append((column,))
-    pickup_ids = [name for name in names if ("pickup" in name or name.startswith("pu_")) and "location" in name and "id" in name]
-    dropoff_ids = [name for name in names if ("dropoff" in name or name.startswith("do_")) and "location" in name and "id" in name]
+    pickup_ids = [
+        name
+        for name in names
+        if ("pickup" in name or name.startswith("pu_")) and "location" in name and "id" in name
+    ]
+    dropoff_ids = [
+        name
+        for name in names
+        if ("dropoff" in name or name.startswith("do_")) and "location" in name and "id" in name
+    ]
     for column in sorted(pickup_ids)[:1] + sorted(dropoff_ids)[:1]:
         index_columns.append((column,))
     index_columns.append(("source_year", "source_month"))
@@ -302,10 +371,14 @@ def create_exploration_indexes(schema_fields: list[dict[str, Any]]) -> list[str]
     with connect() as conn, conn.cursor() as cur:
         for columns in index_columns:
             index_name = "ix_yellow_taxi_" + "_".join(columns)
-            cur.execute(sql.SQL("CREATE INDEX IF NOT EXISTS {} ON {}.{} ({})").format(
-                sql.Identifier(index_name), sql.Identifier(SCHEMA), sql.Identifier(TRIPS_TABLE),
-                sql.SQL(", ").join(map(sql.Identifier, columns)),
-            ))
+            cur.execute(
+                sql.SQL("CREATE INDEX IF NOT EXISTS {} ON {}.{} ({})").format(
+                    sql.Identifier(index_name),
+                    sql.Identifier(SCHEMA),
+                    sql.Identifier(TRIPS_TABLE),
+                    sql.SQL(", ").join(map(sql.Identifier, columns)),
+                )
+            )
             created.append(index_name)
     return created
 
@@ -313,7 +386,9 @@ def create_exploration_indexes(schema_fields: list[dict[str, Any]]) -> list[str]
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--reload", nargs="*", metavar="SOURCE_FILE",
+        "--reload",
+        nargs="*",
+        metavar="SOURCE_FILE",
         help="replace specified source file(s); with no names, reload every available source",
     )
     parser.add_argument(
@@ -344,7 +419,9 @@ def main() -> int:
             reload_names = set(available)
         unknown = reload_names - available
         if unknown:
-            raise ValueError(f"Unknown source file(s): {', '.join(sorted(unknown))}. Available: {', '.join(sorted(available))}")
+            raise ValueError(
+                f"Unknown source file(s): {', '.join(sorted(unknown))}. Available: {', '.join(sorted(available))}"
+            )
 
         # Bootstrap catalog objects before the first idempotency lookup.
         with connect() as conn, conn.cursor() as cur:
@@ -384,9 +461,17 @@ def main() -> int:
             indexes = create_exploration_indexes(schema_fields)
             print(f"Exploration indexes present: {', '.join(indexes) if indexes else 'none'}")
         with connect() as conn, conn.cursor() as cur:
-            cur.execute(sql.SQL("SELECT COUNT(*) FROM {}.{}").format(sql.Identifier(SCHEMA), sql.Identifier(TRIPS_TABLE)))
+            cur.execute(
+                sql.SQL("SELECT COUNT(*) FROM {}.{}").format(
+                    sql.Identifier(SCHEMA), sql.Identifier(TRIPS_TABLE)
+                )
+            )
             total = cur.fetchone()[0]
-            cur.execute(sql.SQL("SELECT source_file, COUNT(*) FROM {}.{} GROUP BY source_file ORDER BY source_file").format(sql.Identifier(SCHEMA), sql.Identifier(TRIPS_TABLE)))
+            cur.execute(
+                sql.SQL(
+                    "SELECT source_file, COUNT(*) FROM {}.{} GROUP BY source_file ORDER BY source_file"
+                ).format(sql.Identifier(SCHEMA), sql.Identifier(TRIPS_TABLE))
+            )
             by_source = cur.fetchall()
         print("\nValidated PostgreSQL summary")
         print(f"Total trip rows: {total:,}")

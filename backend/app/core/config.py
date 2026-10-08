@@ -1,4 +1,10 @@
+import secrets
+from pathlib import Path
+
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+LOCAL_ENV_FILE = Path(__file__).resolve().parents[3] / ".env.local"
 
 
 class Settings(BaseSettings):
@@ -21,10 +27,25 @@ class Settings(BaseSettings):
     max_query_limit: int = 500
     ai_query_timeout_seconds: int = 10
     ai_answer_max_rows: int = 20
+    redis_url: str = "redis://redis:6379/0"
+    # A process-local key keeps development usable without a shared signing secret.
+    # Production requires an explicit, persistent key from the environment.
+    jwt_secret_key: str = Field(default_factory=lambda: secrets.token_urlsafe(48))
+    jwt_algorithm: str = "HS256"
 
-    model_config = SettingsConfigDict(
-        case_sensitive=False, env_file="../.env.local", extra="ignore"
-    )
+    model_config = SettingsConfigDict(case_sensitive=False, env_file=LOCAL_ENV_FILE, extra="ignore")
+
+    @model_validator(mode="after")
+    def validate_production_secret(self) -> "Settings":
+        if self.app_env.lower() == "production":
+            if (
+                "jwt_secret_key" not in self.model_fields_set
+                or len(self.jwt_secret_key) < 32
+                or self.jwt_secret_key.startswith("replace_")
+                or self.jwt_secret_key == "ai-bi-jwt-secret-key-enterprise-phase4"
+            ):
+                raise ValueError("Set JWT_SECRET_KEY to a unique secret of at least 32 characters")
+        return self
 
 
 settings = Settings()

@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { DatasetProvider } from "@/context/DatasetContext";
+import { AuthProvider } from "@/context/AuthContext";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -9,7 +11,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="vi">
-      <body>{children}</body>
+      <body>
+        <AuthProvider>
+          <DatasetProvider>{children}</DatasetProvider>
+        </AuthProvider>
+      </body>
     </html>
   );
 }

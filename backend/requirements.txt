@@ -5,3 +5,7 @@ psycopg[binary]>=3.2,<4.0
 pydantic-settings>=2.8,<3.0
 google-genai>=1.0,<2.0
 mcp>=1.9,<2.0
+pandas>=2.2
+pyarrow>=17.0
+python-multipart>=0.0.9
+redis>=5.0,<6.0

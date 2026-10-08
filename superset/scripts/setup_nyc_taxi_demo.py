@@ -22,7 +22,6 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BASE_URL = "http://localhost:59088"
 DEFAULT_FRONTEND_URL = "http://localhost:43117"
@@ -96,9 +95,13 @@ class SupersetClient:
                 content = response.read()
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
-            raise SupersetError(f"{method.upper()} {path} returned HTTP {exc.code}: {detail}") from exc
+            raise SupersetError(
+                f"{method.upper()} {path} returned HTTP {exc.code}: {detail}"
+            ) from exc
         except urllib.error.URLError as exc:
-            raise SupersetError(f"Could not reach Superset at {self.base_url}: {exc.reason}") from exc
+            raise SupersetError(
+                f"Could not reach Superset at {self.base_url}: {exc.reason}"
+            ) from exc
         if not content:
             return None
         content_type = response.headers.get("Content-Type", "")
@@ -142,9 +145,7 @@ def get_server_version(client: SupersetClient) -> str:
 
 def find_database(client: SupersetClient) -> dict[str, Any]:
     databases = client.list_objects("database")
-    matches = [
-        db for db in databases if db.get("database_name") in DATABASE_NAME_ALIASES
-    ]
+    matches = [db for db in databases if db.get("database_name") in DATABASE_NAME_ALIASES]
     if len(matches) != 1:
         names = [db.get("database_name") for db in databases]
         raise SupersetError(
@@ -188,9 +189,7 @@ METRIC_DEFINITIONS = [
         "expression": "SUM(total_amount)",
         "metric_type": "sql",
         "verbose_name": "Gross Trip Amount",
-        "description": (
-            "Sum of passenger trip total_amount; this is not accounting revenue."
-        ),
+        "description": ("Sum of passenger trip total_amount; this is not accounting revenue."),
         "d3format": "$,.2f",
     },
     {
@@ -215,9 +214,7 @@ METRIC_DEFINITIONS = [
 def ensure_dataset_metadata(client: SupersetClient, dataset_id: int) -> dict[str, Any]:
     detail = client.request("GET", f"/api/v1/dataset/{dataset_id}").get("result", {})
     if detail.get("schema") != TABLE_SCHEMA or detail.get("datasource_name") != TABLE_NAME:
-        raise SupersetError(
-            f"Dataset {dataset_id} does not point to {TABLE_SCHEMA}.{TABLE_NAME}."
-        )
+        raise SupersetError(f"Dataset {dataset_id} does not point to {TABLE_SCHEMA}.{TABLE_NAME}.")
 
     columns = {column["column_name"]: column for column in detail.get("columns", [])}
     expected_columns = {
@@ -469,7 +466,9 @@ def list_chart_by_name(client: SupersetClient, title: str) -> dict[str, Any] | N
     return None
 
 
-def upsert_chart(client: SupersetClient, dataset_id: int, definition: dict[str, Any]) -> dict[str, Any]:
+def upsert_chart(
+    client: SupersetClient, dataset_id: int, definition: dict[str, Any]
+) -> dict[str, Any]:
     body = {
         "slice_name": definition["title"],
         "datasource_id": dataset_id,
@@ -653,7 +652,7 @@ def main() -> int:
     database = find_database(client)
     database_id = int(database["id"])
     dataset_id = get_or_create_dataset(client, database_id)
-    dataset = ensure_dataset_metadata(client, dataset_id)
+    ensure_dataset_metadata(client, dataset_id)
 
     charts: list[dict[str, Any]] = []
     chart_results: list[tuple[dict[str, Any], dict[str, Any]]] = []
@@ -667,9 +666,9 @@ def main() -> int:
     dashboard_id = int(dashboard["id"])
 
     # Confirm the saved chart definitions behind the dashboard layout.
-    dashboard_charts = client.request(
-        "GET", f"/api/v1/dashboard/{dashboard_id}/charts"
-    ).get("result", [])
+    dashboard_charts = client.request("GET", f"/api/v1/dashboard/{dashboard_id}/charts").get(
+        "result", []
+    )
     linked = {int(chart["id"]) for chart in dashboard_charts}
     expected = {int(chart["id"]) for chart in charts}
     if linked != expected:
@@ -706,7 +705,9 @@ def main() -> int:
         f"Dataset: {DATASET_FRIENDLY_NAME} (physical relation "
         f"{CATALOG}.{TABLE_SCHEMA}.{TABLE_NAME}, ID {dataset_id})"
     )
-    print("Dataset metadata: 25 source columns; pickup/dropoff are temporal; requested numeric fields detected")
+    print(
+        "Dataset metadata: 25 source columns; pickup/dropoff are temporal; requested numeric fields detected"
+    )
     print("Metrics:")
     for metric in METRIC_DEFINITIONS:
         print(f"- {metric['metric_name']}: {metric['expression']}")

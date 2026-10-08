@@ -19,9 +19,7 @@ class ChartExplanationValidationError(ValueError):
 class ChartExplanationService:
     """Calculate displayed-chart statistics without sending raw rows to Gemini."""
 
-    def analyze(
-        self, result: QueryResult, visualization: VisualizationSpec
-    ) -> ChartExplanation:
+    def analyze(self, result: QueryResult, visualization: VisualizationSpec) -> ChartExplanation:
         if visualization.type not in {"bar", "line", "pie", "area"}:
             raise ChartExplanationValidationError("Unsupported chart type")
         x_axis, y_axis = visualization.x_axis, visualization.y_axis
@@ -63,8 +61,10 @@ class ChartExplanationService:
         if len(points) == 1:
             category, value = points[0]
             explanation = ChartExplanation(
-                summary=f"Chỉ có một điểm dữ liệu hợp lệ; chưa đủ điểm để so sánh nhóm hoặc xác định xu hướng.",
-                highlights=[f"Điểm hợp lệ duy nhất: {_label_value(category)} — {y_label} {_format_number(value)}."],
+                summary="Chỉ có một điểm dữ liệu hợp lệ; chưa đủ điểm để so sánh nhóm hoặc xác định xu hướng.",
+                highlights=[
+                    f"Điểm hợp lệ duy nhất: {_label_value(category)} — {y_label} {_format_number(value)}."
+                ],
                 note=scope_note,
             )
             return explanation
@@ -168,11 +168,12 @@ class ChartExplanationService:
             )
         if len(points) >= 3:
             changes = [
-                (abs(right[1] - left[1]), left, right)
-                for left, right in zip(points, points[1:])
+                (abs(right[1] - left[1]), left, right) for left, right in zip(points, points[1:])
             ]
             largest_change, left, right = max(changes, key=lambda item: item[0])
-            direction = "tăng" if right[1] > left[1] else "giảm" if right[1] < left[1] else "không đổi"
+            direction = (
+                "tăng" if right[1] > left[1] else "giảm" if right[1] < left[1] else "không đổi"
+            )
             highlights.append(
                 f"Biến động liền kề lớn nhất: {direction} {_format_number(largest_change)} "
                 f"từ {_label_value(left[0])} đến {_label_value(right[0])}."
@@ -199,10 +200,10 @@ def _linear_trend(values: list[Decimal]) -> str:
     mean_x = Decimal(len(values) - 1) / Decimal(2)
     mean_y = sum(values, Decimal(0)) / count
     denominator = sum((Decimal(index) - mean_x) ** 2 for index in range(len(values)))
-    slope = sum(
-        (Decimal(index) - mean_x) * (value - mean_y)
-        for index, value in enumerate(values)
-    ) / denominator
+    slope = (
+        sum((Decimal(index) - mean_x) * (value - mean_y) for index, value in enumerate(values))
+        / denominator
+    )
     value_range = max(values) - min(values)
     tolerance = max(value_range, Decimal(1)) * Decimal("0.000000001")
     if slope > tolerance:
@@ -232,6 +233,7 @@ def _label_value(value: Any) -> str:
     if isinstance(value, (int, float)) and value > 100000000000:
         try:
             from datetime import datetime
+
             return datetime.fromtimestamp(value / 1000.0).strftime("%Y-%m-%d")
         except Exception:
             pass

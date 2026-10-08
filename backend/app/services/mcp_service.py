@@ -32,9 +32,7 @@ _WRITE_TERMS = frozenset(
         "upload",
     }
 )
-_SAFE_META_TOOLS = frozenset(
-    {"health_check", "get_instance_info", "search_tools", "call_tool"}
-)
+_SAFE_META_TOOLS = frozenset({"health_check", "get_instance_info", "search_tools", "call_tool"})
 # These are the read-only Superset 6.1 tools the proxy may invoke in this
 # phase. A positive allowlist is intentional: keyword matching alone would
 # miss write operations such as add_chart_to_existing_dashboard.

@@ -8,3 +8,11 @@ __pycache__
 node_modules
 .next
 npm-debug.log*
+.uv-cache
+.uv-python
+.npm-cache
+.build-check
+.ruff_cache
+*.tsbuildinfo
+data
+docs

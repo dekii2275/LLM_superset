@@ -16,7 +16,17 @@ class VisualizationPlanner(Protocol):
 
 _TIME_TOKENS = ("date", "time", "month", "week", "day", "year", "hour")
 _CATEGORY_TOKENS = ("type", "zone", "borough", "payment", "vendor", "category")
-_MEASURE_TOKENS = ("count", "trip", "total", "amount", "revenue", "fare", "distance", "average", "avg")
+_MEASURE_TOKENS = (
+    "count",
+    "trip",
+    "total",
+    "amount",
+    "revenue",
+    "fare",
+    "distance",
+    "average",
+    "avg",
+)
 
 
 class VisualizationService:
@@ -26,19 +36,57 @@ class VisualizationService:
         self, question: str, result: QueryResult, planner: VisualizationPlanner
     ) -> VisualizationSpec:
         fallback = self.heuristic(result)
-        if fallback.type == "none":
+        has_numeric = any(self._is_numeric_column(result, col) for col in result.columns)
+        if fallback.type == "none" and not (result.row_count == 1 and has_numeric):
             return fallback
         try:
             candidate = await planner.generate_visualization(question, result)
+            validated = self.validate(candidate, result)
+            if validated.type != "none":
+                return validated
         except Exception:
             # A visualization failure must never hide a successful answer/data set.
             return fallback
-        return self.validate(candidate, result)
+        return fallback
 
     def validate(self, spec: VisualizationSpec, result: QueryResult) -> VisualizationSpec:
-        if spec.type == "none":
+        if spec.type == "none" or result.error or not result.rows:
             return VisualizationSpec()
-        if result.error or result.row_count < 2 or not result.rows:
+        if spec.type == "kpi":
+            if (
+                result.row_count >= 1
+                and spec.y_axis
+                and spec.y_axis in result.columns
+                and self._is_numeric_column(result, spec.y_axis)
+            ):
+                return spec
+            return VisualizationSpec()
+        if spec.type == "table":
+            if result.row_count >= 1:
+                return spec
+            return VisualizationSpec()
+        if spec.type == "heatmap":
+            axes = (spec.x_axis, spec.y_axis, spec.value_axis)
+            if (
+                result.row_count >= 2
+                and all(axis and axis in result.columns for axis in axes)
+                and len(set(axes)) == 3
+                and self._is_numeric_column(result, spec.value_axis)
+            ):
+                return spec
+            return VisualizationSpec()
+        if spec.type == "map":
+            has_spatial = any(
+                c.lower()
+                in ("latitude", "longitude", "lat", "lon", "country_iso_a2", "country", "iso_a2")
+                for c in result.columns
+            )
+            if result.row_count >= 1 and (
+                has_spatial or (spec.x_axis and spec.x_axis in result.columns)
+            ):
+                return spec
+            return VisualizationSpec()
+        if result.row_count < 2:
             return VisualizationSpec()
         if not spec.x_axis or not spec.y_axis:
             return VisualizationSpec()
@@ -51,14 +99,16 @@ class VisualizationService:
         return spec
 
     def heuristic(self, result: QueryResult) -> VisualizationSpec:
-        if result.error or result.row_count < 2 or not result.rows:
+        if result.error or not result.rows:
             return VisualizationSpec()
 
         numeric_columns = [
             column for column in result.columns if self._is_numeric_column(result, column)
         ]
-        if not numeric_columns:
+
+        if result.row_count < 2 or not numeric_columns:
             return VisualizationSpec()
+
         y_axis = next(
             (column for column in numeric_columns if self._matches(column, _MEASURE_TOKENS)),
             numeric_columns[-1],
@@ -66,7 +116,9 @@ class VisualizationService:
         candidate_x = [column for column in result.columns if column != y_axis]
         time_columns = [column for column in candidate_x if self._matches(column, _TIME_TOKENS)]
         x_axis = next((column for column in time_columns if "month" in column.lower()), None)
-        x_axis = x_axis or next((column for column in time_columns if "date" in column.lower()), None)
+        x_axis = x_axis or next(
+            (column for column in time_columns if "date" in column.lower()), None
+        )
         x_axis = x_axis or (time_columns[0] if time_columns else None)
         if x_axis:
             chart_type = "line"
@@ -80,8 +132,12 @@ class VisualizationService:
                 None,
             )
             if not x_axis:
-                return VisualizationSpec()
-            chart_type = "pie" if result.row_count <= 8 and self._matches(x_axis, _CATEGORY_TOKENS) else "bar"
+                return VisualizationSpec(type="table", title="Bảng tổng hợp chi tiết")
+            chart_type = (
+                "pie"
+                if result.row_count <= 8 and self._matches(x_axis, _CATEGORY_TOKENS)
+                else "bar"
+            )
 
         return VisualizationSpec(
             type=chart_type,
@@ -95,7 +151,9 @@ class VisualizationService:
     @staticmethod
     def _is_numeric_column(result: QueryResult, column: str) -> bool:
         values = [row.get(column) for row in result.rows if row.get(column) is not None]
-        return bool(values) and all(isinstance(value, Number) and not isinstance(value, bool) for value in values)
+        return bool(values) and all(
+            isinstance(value, Number) and not isinstance(value, bool) for value in values
+        )
 
     @staticmethod
     def _matches(column: str, tokens: tuple[str, ...]) -> bool:

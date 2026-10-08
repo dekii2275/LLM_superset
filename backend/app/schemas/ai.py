@@ -24,11 +24,30 @@ class AIChatContext(BaseModel):
     # asks to save it. The server validates its SQL and visualization again.
     last_query: dict[str, Any] | None = None
     last_visualization: dict[str, Any] | None = None
+    pending_dashboard_plan: dict[str, Any] | None = None
+    session_id: str | None = None
+    conversation_history: list[dict[str, str]] | None = None
+
+
+class DatasetSummary(BaseModel):
+    id: int
+    table_name: str
+    name: str
+    schema_name: str | None = None
+    description: str | None = None
+    column_count: int = 0
+    metric_count: int = 0
+    columns: list[str] = Field(default_factory=list)
+    metrics: list[str] = Field(default_factory=list)
+    default_dashboard_id: int | None = None
+    default_dashboard_title: str | None = None
 
 
 class AIChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4_000)
     context: AIChatContext | None = None
+    dataset_id: int | None = None
+    session_id: str | None = None
 
 
 class IntentResult(BaseModel):
@@ -83,10 +102,14 @@ class QueryResult(BaseModel):
 
 
 class VisualizationSpec(BaseModel):
-    type: Literal["none", "bar", "line", "pie", "area"] = "none"
+    type: Literal[
+        "none", "bar", "line", "pie", "area", "kpi", "table", "scatter", "map", "heatmap"
+    ] = "none"
+    map_style: Literal["grid", "scatter"] | None = None
     title: str | None = None
     x_axis: str | None = None
     y_axis: str | None = None
+    value_axis: str | None = None
     x_label: str | None = None
     y_label: str | None = None
 
@@ -122,12 +145,15 @@ class ChartPlan(BaseModel):
     """A semantic chart request; deliberately independent from Superset form_data."""
 
     title: str = Field(min_length=1, max_length=200)
-    chart_type: Literal["bar", "line", "pie", "area"]
+    chart_type: Literal["bar", "line", "pie", "area", "kpi", "table", "scatter", "map", "heatmap"]
+    map_style: Literal["grid", "scatter"] | None = None
     question: str = Field(min_length=1, max_length=4_000)
     metric: str | None = None
     dimension: str | None = None
+    secondary_dimension: str | None = None
     limit: int | None = Field(default=None, ge=1, le=500)
     sort: str | None = None
+    dataset_id: int | None = None
 
 
 class DashboardPlan(BaseModel):
@@ -135,7 +161,8 @@ class DashboardPlan(BaseModel):
 
     title: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=1_000)
-    charts: list[ChartPlan] = Field(min_length=3, max_length=4)
+    charts: list[ChartPlan] = Field(min_length=2, max_length=8)
+    dataset_id: int | None = None
 
 
 class EditChartOperation(str, Enum):
@@ -230,6 +257,7 @@ class UpdateDashboardResult(CreateDashboardResult):
 
 class ActionExecutionRequest(BaseModel):
     action: AIIntent
+    dataset_id: int | None = None
     chart_plan: ChartPlan | None = None
     dashboard_plan: DashboardPlan | None = None
     query: QueryResult | None = None
@@ -241,7 +269,9 @@ class ActionExecutionRequest(BaseModel):
 class ActionExecutionResponse(BaseModel):
     success: bool
     action: AIIntent
-    result: CreateChartResult | CreateDashboardResult | UpdateChartResult | UpdateDashboardResult | None = None
+    result: (
+        CreateChartResult | CreateDashboardResult | UpdateChartResult | UpdateDashboardResult | None
+    ) = None
     message: str
     error: str | None = None
 
@@ -254,6 +284,17 @@ class AIChatResponse(BaseModel):
     dashboard_plan: DashboardPlan | None = None
     edit_chart_plan: EditChartPlan | None = None
     edit_dashboard_plan: EditDashboardPlan | None = None
-    pending_action: PendingAction | PendingDashboardAction | PendingEditChartAction | PendingEditDashboardAction | None = None
+    pending_action: (
+        PendingAction
+        | PendingDashboardAction
+        | PendingEditChartAction
+        | PendingEditDashboardAction
+        | None
+    ) = None
     query: QueryResult | None = None
     visualization: VisualizationSpec | None = None
+    session_id: str | None = None
+    cached: bool = False
+    cache_type: str | None = None
+    cache_latency_ms: float | None = None
+    applied_rls_filter: str | None = None

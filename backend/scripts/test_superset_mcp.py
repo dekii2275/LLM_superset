@@ -54,8 +54,12 @@ async def main() -> None:
                 if tool in tool_names:
                     await call_and_print(session, tool)
             if "search_tools" in tool_names:
-                await call_and_print(session, "search_tools", {"query": "NYC Yellow Taxi dataset columns metrics"})
-                await call_and_print(session, "search_tools", {"query": "NYC Yellow Taxi Overview dashboard charts"})
+                await call_and_print(
+                    session, "search_tools", {"query": "NYC Yellow Taxi dataset columns metrics"}
+                )
+                await call_and_print(
+                    session, "search_tools", {"query": "NYC Yellow Taxi Overview dashboard charts"}
+                )
             if "call_tool" in tool_names:
                 # Tool-search hides the full catalog; the proxy requests below
                 # prove actual dataset/dashboard discovery through MCP.
@@ -77,7 +81,10 @@ async def main() -> None:
                 dashboards_result = await call_and_print(
                     session,
                     "call_tool",
-                    {"name": "list_dashboards", "arguments": {"request": {"search": "NYC Yellow Taxi Overview"}}},
+                    {
+                        "name": "list_dashboards",
+                        "arguments": {"request": {"search": "NYC Yellow Taxi Overview"}},
+                    },
                 )
                 dashboards = first_text_json(dashboards_result).get("dashboards", [])
                 if dashboards:

@@ -2,7 +2,7 @@ services:
   backend:
     profiles: !reset []
     build: !reset null
-    image: ghcr.io/dekii2275/llm-superset-backend:${BACKEND_IMAGE_TAG:-${IMAGE_TAG:-latest}}
+    image: ghcr.io/${GHCR_NAMESPACE:?Set GHCR_NAMESPACE in .env.prod}/llm-superset-backend:${BACKEND_IMAGE_TAG:-${IMAGE_TAG:-latest}}
     restart: unless-stopped
     volumes: !reset []
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
@@ -12,7 +12,7 @@ services:
   frontend:
     profiles: !reset []
     build: !reset null
-    image: ghcr.io/dekii2275/llm-superset-frontend:${FRONTEND_IMAGE_TAG:-${IMAGE_TAG:-latest}}
+    image: ghcr.io/${GHCR_NAMESPACE:?Set GHCR_NAMESPACE in .env.prod}/llm-superset-frontend:${FRONTEND_IMAGE_TAG:-${IMAGE_TAG:-latest}}
     restart: unless-stopped
     ports: !reset []
     volumes: !reset []
@@ -26,11 +26,11 @@ services:
 
   superset-init:
     build: !reset null
-    image: ghcr.io/dekii2275/llm-superset-superset:${SUPERSET_IMAGE_TAG:-${IMAGE_TAG:-latest}}
+    image: ghcr.io/${GHCR_NAMESPACE:?Set GHCR_NAMESPACE in .env.prod}/llm-superset-superset:${SUPERSET_IMAGE_TAG:-${IMAGE_TAG:-latest}}
 
   superset:
     build: !reset null
-    image: ghcr.io/dekii2275/llm-superset-superset:${SUPERSET_IMAGE_TAG:-${IMAGE_TAG:-latest}}
+    image: ghcr.io/${GHCR_NAMESPACE:?Set GHCR_NAMESPACE in .env.prod}/llm-superset-superset:${SUPERSET_IMAGE_TAG:-${IMAGE_TAG:-latest}}
     environment:
       SUPERSET_EMBEDDED_ALLOWED_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:43117,http://127.0.0.1:43117}
     healthcheck:
@@ -42,7 +42,11 @@ services:
 
   superset-mcp:
     build: !reset null
-    image: ghcr.io/dekii2275/llm-superset-superset:${SUPERSET_IMAGE_TAG:-${IMAGE_TAG:-latest}}
+    image: ghcr.io/${GHCR_NAMESPACE:?Set GHCR_NAMESPACE in .env.prod}/llm-superset-superset:${SUPERSET_IMAGE_TAG:-${IMAGE_TAG:-latest}}
+
+  superset-worker:
+    build: !reset null
+    image: ghcr.io/${GHCR_NAMESPACE:?Set GHCR_NAMESPACE in .env.prod}/llm-superset-superset:${SUPERSET_IMAGE_TAG:-${IMAGE_TAG:-latest}}
 
   public-gateway:
     image: nginx:stable-alpine

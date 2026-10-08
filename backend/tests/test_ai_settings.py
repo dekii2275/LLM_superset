@@ -46,6 +46,7 @@ class AISettingsTests(unittest.TestCase):
             {"llm_enabled": True, "tokens_used": 200},
         )
 
+
 class AIChatSettingTests(unittest.IsolatedAsyncioTestCase):
     async def test_chat_is_rejected_when_llm_is_disabled(self):
         with patch("app.api.ai.is_llm_enabled", return_value=False):

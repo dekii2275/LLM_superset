@@ -52,7 +52,9 @@ export function ChartExplanationModal({ chart, onClose }: ChartExplanationModalP
       })
       .catch((err) => {
         if (active) {
-          setError(err instanceof Error ? err.message : "Không thể tải giải thích biểu đồ từ Superset.");
+          setError(
+            err instanceof Error ? err.message : "Không thể tải giải thích biểu đồ từ Superset.",
+          );
         }
       })
       .finally(() => {
@@ -122,7 +124,9 @@ export function ChartExplanationModal({ chart, onClose }: ChartExplanationModalP
 
           {error && (
             <div className="chart-modal-error" role="alert">
-              <p><strong>Không thể phân tích:</strong> {error}</p>
+              <p>
+                <strong>Không thể phân tích:</strong> {error}
+              </p>
               <button
                 type="button"
                 className="chart-modal-retry"
@@ -131,7 +135,9 @@ export function ChartExplanationModal({ chart, onClose }: ChartExplanationModalP
                   setError(null);
                   explainSupersetChart(chart.id)
                     .then(setData)
-                    .catch((err) => setError(err instanceof Error ? err.message : "Lỗi không xác định"))
+                    .catch((err) =>
+                      setError(err instanceof Error ? err.message : "Lỗi không xác định"),
+                    )
                     .finally(() => setLoading(false));
                 }}
               >
@@ -153,7 +159,9 @@ export function ChartExplanationModal({ chart, onClose }: ChartExplanationModalP
               {data.explanation.highlights && data.explanation.highlights.length > 0 && (
                 <section className="chart-modal-card chart-modal-highlights">
                   <div className="chart-modal-card-title">
-                    <span className="chart-modal-indicator" aria-hidden="true">✦</span>
+                    <span className="chart-modal-indicator" aria-hidden="true">
+                      ✦
+                    </span>
                     <h4>Điểm nổi bật &amp; Xu hướng</h4>
                   </div>
                   <ul>
@@ -166,7 +174,9 @@ export function ChartExplanationModal({ chart, onClose }: ChartExplanationModalP
 
               <section className="chart-modal-card chart-modal-note">
                 <div className="chart-modal-card-title">
-                  <span className="chart-modal-note-icon" aria-hidden="true">ℹ</span>
+                  <span className="chart-modal-note-icon" aria-hidden="true">
+                    ℹ
+                  </span>
                   <h4>Lưu ý phạm vi dữ liệu</h4>
                 </div>
                 <p>{data.explanation.note}</p>
@@ -181,7 +191,9 @@ export function ChartExplanationModal({ chart, onClose }: ChartExplanationModalP
                     aria-expanded={showSql}
                   >
                     <Icon name="code" size={15} />
-                    <span>{showSql ? "Ẩn câu lệnh SQL truy vấn" : "Xem câu lệnh SQL truy vấn"}</span>
+                    <span>
+                      {showSql ? "Ẩn câu lệnh SQL truy vấn" : "Xem câu lệnh SQL truy vấn"}
+                    </span>
                   </button>
                   {showSql && (
                     <pre className="chart-modal-sql-code">

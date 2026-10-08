@@ -8,7 +8,8 @@ x-superset-environment: &superset-environment
   POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env.local or .env.prod}
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.local or .env.prod}
   SUPERSET_DB_NAME: ${SUPERSET_DB_NAME:-superset}
-  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  REDIS_URL: redis://redis:6379/0
+  SUPERSET_GUEST_TOKEN_JWT_SECRET: ${SUPERSET_GUEST_TOKEN_JWT_SECRET:-${SUPERSET_SECRET_KEY}}
   SUPERSET_CONFIG_PATH: /app/superset_config.py
   SUPERSET_APP_ROOT: ${SUPERSET_APP_ROOT:-}
   ENABLE_PROXY_FIX: ${ENABLE_PROXY_FIX:-false}
@@ -62,6 +63,8 @@ services:
     environment:
       APP_NAME: ${APP_NAME:-AI BI Assistant API}
       APP_ENV: ${APP_ENV:-development}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env.local or .env.prod}
+      REDIS_URL: redis://redis:6379/0
       DATABASE_URL: >-
         postgresql+psycopg://${POSTGRES_USER:?Set POSTGRES_USER in .env.local or .env.prod}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.local or .env.prod}@postgres:5432/${APP_DB_NAME:-ai_bi}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:43117}
@@ -188,6 +191,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os; from celery import Celery; app = Celery(broker=os.environ['REDIS_URL']); raise SystemExit(0 if app.control.ping(timeout=3) else 1)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     networks:
       - ai_bi_network
 

@@ -20,9 +20,14 @@ export default function SettingsPage() {
         }
       })
       .catch((requestError) => {
-        if (active) setError(requestError instanceof Error ? requestError.message : "Không thể tải cài đặt AI.");
+        if (active)
+          setError(
+            requestError instanceof Error ? requestError.message : "Không thể tải cài đặt AI.",
+          );
       });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
   const updateLlmSetting = async (enabled: boolean) => {
@@ -33,7 +38,9 @@ export default function SettingsPage() {
       setLlmEnabled(settings.llm_enabled);
       setTokensUsed(settings.tokens_used);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Không thể cập nhật cài đặt AI.");
+      setError(
+        requestError instanceof Error ? requestError.message : "Không thể cập nhật cài đặt AI.",
+      );
     } finally {
       setSaving(false);
     }
@@ -64,7 +71,9 @@ export default function SettingsPage() {
               type="checkbox"
               checked={llmEnabled === true}
               disabled={llmEnabled === null || saving}
-              onChange={(event) => { void updateLlmSetting(event.target.checked); }}
+              onChange={(event) => {
+                void updateLlmSetting(event.target.checked);
+              }}
               aria-label="Bật trò chuyện AI"
             />
           </label>
@@ -73,10 +82,19 @@ export default function SettingsPage() {
               <b>Tổng token hệ thống đã sử dụng</b>
               <small>Cộng dồn từ các lượt gọi Gemini kể từ khi bật thống kê.</small>
             </span>
-            <strong>{tokensUsed === null ? "—" : new Intl.NumberFormat("vi-VN").format(tokensUsed)}</strong>
+            <strong>
+              {tokensUsed === null ? "—" : new Intl.NumberFormat("vi-VN").format(tokensUsed)}
+            </strong>
           </div>
           <p className="settings-status" role="status" aria-live="polite">
-            {error ?? (saving ? "Đang lưu…" : llmEnabled === null ? "Đang tải cài đặt…" : llmEnabled ? "Đã bật trò chuyện AI" : "Đã tắt trò chuyện AI")}
+            {error ??
+              (saving
+                ? "Đang lưu…"
+                : llmEnabled === null
+                  ? "Đang tải cài đặt…"
+                  : llmEnabled
+                    ? "Đã bật trò chuyện AI"
+                    : "Đã tắt trò chuyện AI")}
           </p>
         </section>
       </section>

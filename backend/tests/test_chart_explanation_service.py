@@ -46,13 +46,21 @@ class ChartExplanationServiceTests(unittest.TestCase):
     def test_pie_share_uses_only_positive_displayed_values(self) -> None:
         result = QueryResult(
             columns=["payment", "total"],
-            rows=[{"payment": "card", "total": Decimal("3")}, {"payment": "cash", "total": Decimal("1")}],
+            rows=[
+                {"payment": "card", "total": Decimal("3")},
+                {"payment": "cash", "total": Decimal("1")},
+            ],
         )
         explanation = self.service.analyze(
             result,
             VisualizationSpec(type="pie", x_axis="payment", y_axis="total"),
         )
-        self.assertTrue(any("75%" in item and "các nhóm được truy vấn" in item for item in explanation.highlights))
+        self.assertTrue(
+            any(
+                "75%" in item and "các nhóm được truy vấn" in item
+                for item in explanation.highlights
+            )
+        )
 
     def test_line_chart_reports_end_change_but_does_not_claim_trend_with_two_points(self) -> None:
         result = QueryResult(
@@ -80,7 +88,9 @@ class ChartExplanationServiceTests(unittest.TestCase):
             VisualizationSpec(type="area", x_axis="month", y_axis="trips"),
         )
         self.assertIn("giảm", explanation.summary)
-        self.assertTrue(any("Biến động liền kề lớn nhất: giảm 8" in item for item in explanation.highlights))
+        self.assertTrue(
+            any("Biến động liền kề lớn nhất: giảm 8" in item for item in explanation.highlights)
+        )
 
     def test_missing_and_non_numeric_values_are_excluded_and_reported(self) -> None:
         result = QueryResult(
@@ -122,7 +132,9 @@ class ChartExplanationServiceTests(unittest.TestCase):
     def test_axes_must_exist_in_reexecuted_result(self) -> None:
         result = QueryResult(columns=["month", "trips"], rows=[])
         with self.assertRaises(ChartExplanationValidationError):
-            self.service.analyze(result, VisualizationSpec(type="bar", x_axis="zone", y_axis="trips"))
+            self.service.analyze(
+                result, VisualizationSpec(type="bar", x_axis="zone", y_axis="trips")
+            )
 
 
 class ExplainChartEndpointTests(unittest.IsolatedAsyncioTestCase):
@@ -132,8 +144,10 @@ class ExplainChartEndpointTests(unittest.IsolatedAsyncioTestCase):
             columns=["zone", "trips"],
             rows=[{"zone": "A", "trips": 12}, {"zone": "B", "trips": 5}],
         )
-        with patch("app.api.ai.QueryService") as query_service_type, \
-             patch("app.api.ai.settings.gemini_api_key", ""):
+        with (
+            patch("app.api.ai.QueryService") as query_service_type,
+            patch("app.api.ai.settings.gemini_api_key", ""),
+        ):
             query_service_type.return_value.execute_query = AsyncMock(return_value=result)
             response = await explain_chart(
                 ExplainChartRequest(
@@ -141,12 +155,16 @@ class ExplainChartEndpointTests(unittest.IsolatedAsyncioTestCase):
                     visualization=VisualizationSpec(type="bar", x_axis="zone", y_axis="trips"),
                 )
             )
-        query_service_type.return_value.execute_query.assert_awaited_once_with("SELECT zone, trips FROM result")
+        query_service_type.return_value.execute_query.assert_awaited_once_with(
+            "SELECT zone, trips FROM result"
+        )
         self.assertIn("7", response.highlights[2])
 
     async def test_endpoint_rejects_sql_blocked_by_read_only_policy(self) -> None:
         with patch("app.api.ai.QueryService") as query_service_type:
-            query_service_type.return_value.execute_query = AsyncMock(side_effect=SQLValidationError("blocked"))
+            query_service_type.return_value.execute_query = AsyncMock(
+                side_effect=SQLValidationError("blocked")
+            )
             with self.assertRaises(HTTPException) as error:
                 await explain_chart(
                     ExplainChartRequest(
@@ -159,16 +177,27 @@ class ExplainChartEndpointTests(unittest.IsolatedAsyncioTestCase):
 
 class SupersetDashboardChartsTests(unittest.IsolatedAsyncioTestCase):
     def test_list_dashboard_charts_returns_mapped_charts(self) -> None:
-        from app.api.superset import list_dashboard_charts
         from unittest.mock import MagicMock
+
+        from app.api.superset import list_dashboard_charts
 
         mock_client = MagicMock()
         mock_client.request.side_effect = lambda method, path: {
             "/api/v1/dashboard/nyc-taxi-trips-analysis": {"result": {"id": 2}},
             "/api/v1/dashboard/2/charts": {
                 "result": [
-                    {"id": 23, "slice_name": "Total Trips by Vendor", "viz_type": "pie", "description": "Vendor pie"},
-                    {"id": 5, "slice_name": "Total No Of Trips", "viz_type": "big_number_total", "description": "KPI"},
+                    {
+                        "id": 23,
+                        "slice_name": "Total Trips by Vendor",
+                        "viz_type": "pie",
+                        "description": "Vendor pie",
+                    },
+                    {
+                        "id": 5,
+                        "slice_name": "Total No Of Trips",
+                        "viz_type": "big_number_total",
+                        "description": "KPI",
+                    },
                 ]
             },
         }.get(path, {"result": {}})
@@ -183,17 +212,30 @@ class SupersetDashboardChartsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(charts[1]["viz_type"], "kpi")
 
     async def test_explain_superset_chart_kpi(self) -> None:
-        from app.api.superset import explain_superset_chart
         from unittest.mock import MagicMock
+
+        from app.api.superset import explain_superset_chart
 
         mock_client = MagicMock()
         mock_client.request.side_effect = lambda method, path: {
-            "/api/v1/chart/5": {"result": {"id": 5, "slice_name": "Total Trips", "viz_type": "big_number_total"}},
-            "/api/v1/chart/5/data/": {"result": [{"colnames": ["Total Trips"], "data": [{"Total Trips": 30000}], "query": "SELECT 30000"}]},
+            "/api/v1/chart/5": {
+                "result": {"id": 5, "slice_name": "Total Trips", "viz_type": "big_number_total"}
+            },
+            "/api/v1/chart/5/data/": {
+                "result": [
+                    {
+                        "colnames": ["Total Trips"],
+                        "data": [{"Total Trips": 30000}],
+                        "query": "SELECT 30000",
+                    }
+                ]
+            },
         }.get(path, {"result": {}})
 
-        with patch("app.api.superset.get_client", return_value=mock_client), \
-             patch("app.api.superset.settings.gemini_api_key", ""):
+        with (
+            patch("app.api.superset.get_client", return_value=mock_client),
+            patch("app.api.superset.settings.gemini_api_key", ""),
+        ):
             res = await explain_superset_chart(5)
 
         self.assertEqual(res["chart_id"], 5)
@@ -202,8 +244,9 @@ class SupersetDashboardChartsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(res["sql"], "SELECT 30000")
 
     async def test_explain_superset_chart_categorical(self) -> None:
-        from app.api.superset import explain_superset_chart
         from unittest.mock import MagicMock
+
+        from app.api.superset import explain_superset_chart
 
         mock_client = MagicMock()
         mock_client.request.side_effect = lambda method, path: {
@@ -219,15 +262,20 @@ class SupersetDashboardChartsTests(unittest.IsolatedAsyncioTestCase):
                 "result": [
                     {
                         "colnames": ["vendor_name", "count"],
-                        "data": [{"vendor_name": "CMT", "count": 100}, {"vendor_name": "VTS", "count": 20}],
+                        "data": [
+                            {"vendor_name": "CMT", "count": 100},
+                            {"vendor_name": "VTS", "count": 20},
+                        ],
                         "query": "SELECT vendor_name, count FROM t",
                     }
                 ]
             },
         }.get(path, {"result": {}})
 
-        with patch("app.api.superset.get_client", return_value=mock_client), \
-             patch("app.api.superset.settings.gemini_api_key", ""):
+        with (
+            patch("app.api.superset.get_client", return_value=mock_client),
+            patch("app.api.superset.settings.gemini_api_key", ""),
+        ):
             res = await explain_superset_chart(23)
 
         self.assertEqual(res["chart_id"], 23)
@@ -236,8 +284,9 @@ class SupersetDashboardChartsTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("100", res["explanation"]["highlights"][0])
 
     async def test_explain_superset_chart_gemini_enhanced(self) -> None:
+        from unittest.mock import AsyncMock, MagicMock
+
         from app.api.superset import explain_superset_chart
-        from unittest.mock import MagicMock, AsyncMock
 
         mock_client = MagicMock()
         mock_client.request.side_effect = lambda method, path: {
@@ -253,7 +302,10 @@ class SupersetDashboardChartsTests(unittest.IsolatedAsyncioTestCase):
                 "result": [
                     {
                         "colnames": ["vendor_name", "count"],
-                        "data": [{"vendor_name": "CMT", "count": 100}, {"vendor_name": "VTS", "count": 20}],
+                        "data": [
+                            {"vendor_name": "CMT", "count": 100},
+                            {"vendor_name": "VTS", "count": 20},
+                        ],
                         "query": "SELECT vendor_name, count FROM t",
                     }
                 ]
@@ -261,15 +313,19 @@ class SupersetDashboardChartsTests(unittest.IsolatedAsyncioTestCase):
         }.get(path, {"result": {}})
 
         mock_gemini = MagicMock()
-        mock_gemini.generate_chart_explanation = AsyncMock(return_value=ChartExplanation(
-            summary="Gemini nhận định: CMT chiếm lĩnh thị phần áp đảo.",
-            highlights=["CMT dẫn đầu với 100 chuyến.", "VTS chiếm phần nhỏ còn lại."],
-            note="Dữ liệu chính xác từ Superset.",
-        ))
+        mock_gemini.generate_chart_explanation = AsyncMock(
+            return_value=ChartExplanation(
+                summary="Gemini nhận định: CMT chiếm lĩnh thị phần áp đảo.",
+                highlights=["CMT dẫn đầu với 100 chuyến.", "VTS chiếm phần nhỏ còn lại."],
+                note="Dữ liệu chính xác từ Superset.",
+            )
+        )
 
-        with patch("app.api.superset.get_client", return_value=mock_client), \
-             patch("app.api.superset.settings.gemini_api_key", "mock-key"), \
-             patch("app.api.superset.GeminiService", return_value=mock_gemini):
+        with (
+            patch("app.api.superset.get_client", return_value=mock_client),
+            patch("app.api.superset.settings.gemini_api_key", "mock-key"),
+            patch("app.api.superset.GeminiService", return_value=mock_gemini),
+        ):
             res = await explain_superset_chart(23)
 
         self.assertEqual(res["chart_id"], 23)
@@ -279,4 +335,3 @@ class SupersetDashboardChartsTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

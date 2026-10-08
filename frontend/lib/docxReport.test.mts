@@ -4,8 +4,10 @@ import JSZip from "jszip";
 import { createDocxReport } from "./docxReport.ts";
 
 test("places each chart image beside its own insight without a dashboard snapshot", async () => {
-  const chartOnePng = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC";
-  const chartTwoPng = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgYPgPAAEDAQAIicLsAAAAAElFTkSuQmCC";
+  const chartOnePng =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC";
+  const chartTwoPng =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgYPgPAAEDAQAIicLsAAAAAElFTkSuQmCC";
   const report = {
     dashboard_title: "Báo cáo thử",
     active_tab_title: "Trips & Revenue",
@@ -39,11 +41,14 @@ test("places each chart image beside its own insight without a dashboard snapsho
   };
   const blob = await createDocxReport(report);
 
-  assert.equal(blob.type, "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+  assert.equal(
+    blob.type,
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  );
   const archive = await JSZip.loadAsync(await blob.arrayBuffer());
   const documentXml = await archive.file("word/document.xml")!.async("string");
-  const imageParts = Object.keys(archive.files).filter((path) =>
-    path.startsWith("word/media/") && !archive.files[path].dir,
+  const imageParts = Object.keys(archive.files).filter(
+    (path) => path.startsWith("word/media/") && !archive.files[path].dir,
   );
 
   assert.equal(imageParts.length, 2, "DOCX should contain one image for each chart");
@@ -53,6 +58,12 @@ test("places each chart image beside its own insight without a dashboard snapsho
   const firstImage = documentXml.indexOf("<w:drawing>", firstInsight);
   const secondImage = documentXml.indexOf("<w:drawing>", secondChart);
   assert.ok(firstChart < firstInsight && firstInsight < firstImage && firstImage < secondChart);
-  assert.ok(secondChart < secondImage, "the second chart image should follow the second chart heading");
-  assert.ok(!documentXml.includes("Dashboard hiện tại"), "report should not insert a full dashboard snapshot");
+  assert.ok(
+    secondChart < secondImage,
+    "the second chart image should follow the second chart heading",
+  );
+  assert.ok(
+    !documentXml.includes("Dashboard hiện tại"),
+    "report should not insert a full dashboard snapshot",
+  );
 });

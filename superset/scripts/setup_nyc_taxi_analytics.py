@@ -33,7 +33,6 @@ from setup_nyc_taxi_demo import (
     load_dotenv,
 )
 
-
 DATABASE_NAME = "NYC Taxi PostgreSQL"
 DATASET_NAME = "nyc_taxi_analysis"
 DASHBOARD_TITLE = "NYC Taxi Trips Analysis"
@@ -79,6 +78,7 @@ def dashboard_background_css() -> str:
   background: transparent !important;
 }}
 """
+
 
 VIRTUAL_DATASET_SQL = """SELECT
     trips.*,
@@ -334,9 +334,7 @@ def available_years(
     )
     result = response.get("result", response)
     rows = result.get("data", [])
-    available = {
-        int(row["source_year"]) for row in rows if row.get("source_year") is not None
-    }
+    available = {int(row["source_year"]) for row in rows if row.get("source_year") is not None}
     if not available:
         raise SupersetError(
             "Could not read source_year values from raw.yellow_taxi_trips; "
@@ -345,7 +343,9 @@ def available_years(
     if requested_years:
         missing = sorted(set(requested_years) - available)
         if missing:
-            raise SupersetError(f"Requested source years are not present in the dataset: {missing}.")
+            raise SupersetError(
+                f"Requested source years are not present in the dataset: {missing}."
+            )
         return sorted(set(requested_years))
     return sorted(available)[-2:]
 
@@ -412,12 +412,15 @@ def metric_definition(
         )
     query = {
         "columns": (
-            [{
-                "columnType": "BASE_AXIS",
-                "sqlExpression": x_axis,
-                "label": x_axis,
-                "expressionType": "SQL",
-            }]
+            [
+                {
+                    "columnType": "BASE_AXIS",
+                    "sqlExpression": x_axis,
+                    "label": x_axis,
+                    "expressionType": "SQL",
+                    "isColumnReference": True,
+                }
+            ]
             if x_axis
             else groupby or []
         ),
@@ -437,7 +440,9 @@ def metric_definition(
     if (groupby or x_axis) and not time_series:
         query["orderby"] = [[metric, False]]
     if time_series:
-        query["orderby"] = [[metric, False]]
+        # The year-specific trend controls compile to ascending metric order
+        # in the embedded query. Guest validation compares this saved tuple.
+        query["orderby"] = [[metric, year is not None]]
     form_data = {
         "datasource": source,
         "viz_type": viz_type,
@@ -760,7 +765,9 @@ def find_chart(client: SupersetClient, title: str, dataset_id: int) -> dict[str,
     )
 
 
-def upsert_chart(client: SupersetClient, dataset_id: int, definition: dict[str, Any]) -> dict[str, Any]:
+def upsert_chart(
+    client: SupersetClient, dataset_id: int, definition: dict[str, Any]
+) -> dict[str, Any]:
     body = {
         "slice_name": definition["title"],
         "datasource_id": dataset_id,
@@ -838,9 +845,9 @@ def dashboard_positions(charts: list[dict[str, Any]], years: list[int]) -> dict[
             }
             if chart["slice_name"].endswith(" (Trip Patterns)"):
                 suffix = " (Trip Patterns)"
-                positions[chart_key]["meta"]["sliceNameOverride"] = chart[
-                    "slice_name"
-                ][: -len(suffix)]
+                positions[chart_key]["meta"]["sliceNameOverride"] = chart["slice_name"][
+                    : -len(suffix)
+                ]
         positions[container_id]["children"].append(row_id)
         positions[row_id] = {
             "id": row_id,
@@ -1164,9 +1171,9 @@ def main() -> int:
 
     linked = {
         int(chart["id"])
-        for chart in client.request(
-            "GET", f"/api/v1/dashboard/{dashboard_id}/charts"
-        ).get("result", [])
+        for chart in client.request("GET", f"/api/v1/dashboard/{dashboard_id}/charts").get(
+            "result", []
+        )
     }
     expected = {int(chart["id"]) for chart in charts}
     if linked != expected:

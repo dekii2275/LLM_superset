@@ -3,12 +3,18 @@ import type { ChatMessage as ChatMessageType, CreateDashboardResult } from "@/li
 import { Icon } from "@/components/ui/Icon";
 import { DynamicChart } from "./DynamicChart";
 import { QueryResultDetails } from "./QueryResultDetails";
-import { ActionConfirmation, DashboardConfirmation, EditChartConfirmation, EditDashboardConfirmation } from "./ActionConfirmation";
+import {
+  ActionConfirmation,
+  DashboardConfirmation,
+  EditChartConfirmation,
+  EditDashboardConfirmation,
+} from "./ActionConfirmation";
 import { ApiError, explainChart } from "@/lib/api";
 import type { ChartExplanation } from "@/lib/types";
 
 type ChatMessageProps = {
   message: ChatMessageType;
+  dashboardDraftSuperseded?: boolean;
   onDashboardCreated?: (result: CreateDashboardResult) => void;
   onDashboardUpdated?: (result?: CreateDashboardResult) => void;
 };
@@ -39,7 +45,12 @@ function parameterText(parameters: Record<string, unknown> | undefined): string[
     .map(([key, value]) => `${parameterLabels[key] ?? key.replace(/_/g, " ")}: ${String(value)}`);
 }
 
-export function ChatMessage({ message, onDashboardCreated, onDashboardUpdated }: ChatMessageProps) {
+export function ChatMessage({
+  message,
+  dashboardDraftSuperseded,
+  onDashboardCreated,
+  onDashboardUpdated,
+}: ChatMessageProps) {
   const isAssistant = message.role === "assistant";
   const [chartExplanation, setChartExplanation] = useState<ChartExplanation | null>(null);
   const [explanationOpen, setExplanationOpen] = useState(false);
@@ -49,10 +60,16 @@ export function ChatMessage({ message, onDashboardCreated, onDashboardUpdated }:
   const query = message.query;
   const visualization = message.visualization;
   const canExplainChart = Boolean(
-    isAssistant && query && !query.error && query.sql && query.rows.length >= 2 &&
-    visualization && visualization.type !== "none" &&
-    ["bar", "line", "pie", "area"].includes(visualization.type) &&
-    visualization.x_axis && visualization.y_axis,
+    isAssistant &&
+      query &&
+      !query.error &&
+      query.sql &&
+      query.rows.length >= 2 &&
+      visualization &&
+      visualization.type !== "none" &&
+      ["bar", "line", "pie", "area"].includes(visualization.type) &&
+      visualization.x_axis &&
+      visualization.y_axis,
   );
 
   const handleChartExplanation = async () => {
@@ -85,12 +102,33 @@ export function ChatMessage({ message, onDashboardCreated, onDashboardUpdated }:
 
   return (
     <article className={`chat-message ${isAssistant ? "assistant-message" : "user-message"}`}>
-      <div className={`message-avatar ${isAssistant ? "assistant-avatar" : "user-avatar"}`} aria-hidden="true">
+      <div
+        className={`message-avatar ${isAssistant ? "assistant-avatar" : "user-avatar"}`}
+        aria-hidden="true"
+      >
         {isAssistant ? <Icon name="sparkle" size={16} /> : "AN"}
       </div>
       <div className="message-content-wrap">
         <div className="message-heading">
-          <strong>{isAssistant ? "AI BI Assistant" : "Bạn"}</strong>
+          <div className="flex items-center gap-2 flex-wrap">
+            <strong>{isAssistant ? "AI BI Assistant" : "Bạn"}</strong>
+            {message.cached && (
+              <span
+                className="cache-hit-badge"
+                title={`Phản hồi tức thì từ Semantic Cache (${message.cache_latency_ms ?? 12}ms)`}
+              >
+                ⚡ Cache ({message.cache_latency_ms ?? 12}ms)
+              </span>
+            )}
+            {message.applied_rls_filter && (
+              <span
+                className="rls-badge"
+                title={`Đã tiêm điều kiện phân quyền: ${message.applied_rls_filter}`}
+              >
+                🔒 {message.applied_rls_filter}
+              </span>
+            )}
+          </div>
           <time dateTime={message.createdAt}>{formatTime(message.createdAt)}</time>
         </div>
         <div className="message-content">{message.content}</div>
@@ -106,9 +144,13 @@ export function ChatMessage({ message, onDashboardCreated, onDashboardUpdated }:
               </span>
             )}
             {parameterText(message.actionPlan.parameters).map((value) => (
-              <span className="action-plan-detail" key={value}>{value}</span>
+              <span className="action-plan-detail" key={value}>
+                {value}
+              </span>
             ))}
-            <span className="action-plan-status">Sẵn sàng cho bước tiếp theo — chưa có thay đổi nào</span>
+            <span className="action-plan-status">
+              Sẵn sàng cho bước tiếp theo — chưa có thay đổi nào
+            </span>
           </section>
         )}
 
@@ -116,7 +158,12 @@ export function ChatMessage({ message, onDashboardCreated, onDashboardUpdated }:
           <DynamicChart
             spec={message.visualization}
             rows={message.query.rows}
-            eyebrow={message.pendingAction?.action === "EDIT_DASHBOARD" && message.pendingAction.edit_dashboard_plan.operation === "ADD_CHART" ? "Xem trước biểu đồ sẽ thêm vào bảng điều khiển" : undefined}
+            eyebrow={
+              message.pendingAction?.action === "EDIT_DASHBOARD" &&
+              message.pendingAction.edit_dashboard_plan.operation === "ADD_CHART"
+                ? "Xem trước biểu đồ sẽ thêm vào bảng điều khiển"
+                : undefined
+            }
           />
         )}
 
@@ -134,10 +181,18 @@ export function ChatMessage({ message, onDashboardCreated, onDashboardUpdated }:
               {explanationLoading
                 ? "Đang phân tích biểu đồ…"
                 : chartExplanation
-                  ? explanationOpen ? "Ẩn giải thích" : "Hiện giải thích"
-                  : explanationError ? "Thử lại" : "Giải thích biểu đồ"}
+                  ? explanationOpen
+                    ? "Ẩn giải thích"
+                    : "Hiện giải thích"
+                  : explanationError
+                    ? "Thử lại"
+                    : "Giải thích biểu đồ"}
             </button>
-            {explanationError && <p className="chart-explanation-error" role="alert">{explanationError}</p>}
+            {explanationError && (
+              <p className="chart-explanation-error" role="alert">
+                {explanationError}
+              </p>
+            )}
             {explanationOpen && chartExplanation && (
               <div className="chart-explanation-result" aria-live="polite">
                 <div>
@@ -148,7 +203,9 @@ export function ChatMessage({ message, onDashboardCreated, onDashboardUpdated }:
                   <div>
                     <h5>Điểm nổi bật</h5>
                     <ul>
-                      {chartExplanation.highlights.map((highlight, index) => <li key={`${index}-${highlight}`}>{highlight}</li>)}
+                      {chartExplanation.highlights.map((highlight, index) => (
+                        <li key={`${index}-${highlight}`}>{highlight}</li>
+                      ))}
                     </ul>
                   </div>
                 )}
@@ -165,20 +222,37 @@ export function ChatMessage({ message, onDashboardCreated, onDashboardUpdated }:
           <QueryResultDetails query={message.query} />
         )}
 
-        {isAssistant && message.pendingAction?.action === "CREATE_CHART" && message.query && message.visualization && (
-          <ActionConfirmation
-            action={message.pendingAction}
-            query={message.query}
-            visualization={message.visualization}
-          />
-        )}
+        {isAssistant &&
+          message.pendingAction?.action === "CREATE_CHART" &&
+          message.query &&
+          message.visualization && (
+            <ActionConfirmation
+              action={message.pendingAction}
+              query={message.query}
+              visualization={message.visualization}
+            />
+          )}
 
-        {isAssistant && message.pendingAction?.action === "CREATE_DASHBOARD" && (
-          <DashboardConfirmation action={message.pendingAction} onDashboardCreated={onDashboardCreated} />
-        )}
+        {isAssistant &&
+          message.pendingAction?.action === "CREATE_DASHBOARD" &&
+          dashboardDraftSuperseded && (
+            <p className="action-cancelled">Bản nháp này đã được thay bằng bản mới ở phía dưới.</p>
+          )}
+
+        {isAssistant &&
+          message.pendingAction?.action === "CREATE_DASHBOARD" &&
+          !dashboardDraftSuperseded && (
+            <DashboardConfirmation
+              action={message.pendingAction}
+              onDashboardCreated={onDashboardCreated}
+            />
+          )}
 
         {isAssistant && message.pendingAction?.action === "EDIT_CHART" && (
-          <EditChartConfirmation action={message.pendingAction} onUpdated={() => onDashboardUpdated?.()} />
+          <EditChartConfirmation
+            action={message.pendingAction}
+            onUpdated={() => onDashboardUpdated?.()}
+          />
         )}
 
         {isAssistant && message.pendingAction?.action === "EDIT_DASHBOARD" && (
@@ -194,7 +268,9 @@ export function ChatMessage({ message, onDashboardCreated, onDashboardUpdated }:
           <div className="query-meta" aria-label="Công cụ Superset đã dùng">
             {message.toolCalls.map((toolCall, index) => (
               <span key={`${toolCall.tool}-${index}`} title={toolCall.summary ?? undefined}>
-                <span className={`status-dot ${toolCall.status === "success" ? "connected" : "disconnected"}`} />
+                <span
+                  className={`status-dot ${toolCall.status === "success" ? "connected" : "disconnected"}`}
+                />
                 {toolCall.tool.replace(/_/g, " ")}
               </span>
             ))}

@@ -25,7 +25,9 @@ router = APIRouter(prefix="/api/v1/superset", tags=["superset"])
 
 def get_client() -> SupersetClient:
     if not settings.superset_admin_username or not settings.superset_admin_password:
-        raise HTTPException(status_code=503, detail="Superset embed credentials are not configured.")
+        raise HTTPException(
+            status_code=503, detail="Superset embed credentials are not configured."
+        )
     client = SupersetClient(
         settings.superset_url,
         settings.superset_admin_username,
@@ -90,15 +92,21 @@ def list_dashboard_charts(dashboard_id: int | None = None) -> list[dict[str, Any
         target_id = dashboard_id
         if not target_id:
             try:
-                dash_res = client.request("GET", f"/api/v1/dashboard/{settings.superset_dashboard_slug}").get("result", {})
+                dash_res = client.request(
+                    "GET", f"/api/v1/dashboard/{settings.superset_dashboard_slug}"
+                ).get("result", {})
                 target_id = dash_res.get("id")
             except Exception:
                 target_id = None
 
         if target_id:
-            raw_charts = client.request("GET", f"/api/v1/dashboard/{target_id}/charts").get("result", [])
+            raw_charts = client.request("GET", f"/api/v1/dashboard/{target_id}/charts").get(
+                "result", []
+            )
         else:
-            raw_charts = client.request("GET", "/api/v1/chart/?q=(page:0,page_size:100)").get("result", [])
+            raw_charts = client.request("GET", "/api/v1/chart/?q=(page:0,page_size:100)").get(
+                "result", []
+            )
 
         charts: list[dict[str, Any]] = []
         seen_ids = set()
@@ -127,19 +135,23 @@ def list_dashboard_charts(dashboard_id: int | None = None) -> list[dict[str, Any
             elif raw_viz == "big_number_total":
                 viz_type = "kpi"
 
-            charts.append({
-                "id": chart_id,
-                "slice_name": item.get("slice_name") or "Biểu đồ",
-                "viz_type": viz_type,
-                "raw_viz_type": raw_viz,
-                "description": item.get("description") or "",
-            })
+            charts.append(
+                {
+                    "id": chart_id,
+                    "slice_name": item.get("slice_name") or "Biểu đồ",
+                    "viz_type": viz_type,
+                    "raw_viz_type": raw_viz,
+                    "description": item.get("description") or "",
+                }
+            )
         return charts
     except SupersetEmbedError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     except Exception as error:
         logger.exception("list_dashboard_charts_failed")
-        raise HTTPException(status_code=500, detail="Không thể tải danh sách biểu đồ từ Superset.") from error
+        raise HTTPException(
+            status_code=500, detail="Không thể tải danh sách biểu đồ từ Superset."
+        ) from error
 
 
 @router.post("/charts/{chart_id}/explain")
@@ -173,7 +185,11 @@ async def explain_superset_chart(chart_id: int) -> dict[str, Any]:
         sql = entry.get("query")
 
         explanation_service = ChartExplanationService()
-        gemini = GeminiService(settings.gemini_api_key, settings.gemini_model) if settings.gemini_api_key else None
+        gemini = (
+            GeminiService(settings.gemini_api_key, settings.gemini_model)
+            if settings.gemini_api_key
+            else None
+        )
 
         # Handle KPI / big_number_total or 1 row with 1 col
         if raw_viz == "big_number_total" or (len(colnames) == 1 and len(data) == 1):
@@ -245,7 +261,9 @@ async def explain_superset_chart(chart_id: int) -> dict[str, Any]:
                 x_axis = [c for c in colnames if c != y_axis][0]
 
         if not x_axis or not y_axis:
-            raise HTTPException(status_code=422, detail="Không thể xác định các trục dữ liệu để phân tích biểu đồ.")
+            raise HTTPException(
+                status_code=422, detail="Không thể xác định các trục dữ liệu để phân tích biểu đồ."
+            )
 
         qr = QueryResult(columns=colnames, rows=data, row_count=len(data))
         spec = VisualizationSpec(type=viz_type, x_axis=x_axis, y_axis=y_axis, title=chart_name)
@@ -269,12 +287,17 @@ async def explain_superset_chart(chart_id: int) -> dict[str, Any]:
         raise
     except Exception as error:
         logger.exception("explain_superset_chart_failed chart_id=%s", chart_id)
-        raise HTTPException(status_code=500, detail=f"Không thể phân tích biểu đồ: {error}") from error
+        raise HTTPException(
+            status_code=500, detail=f"Không thể phân tích biểu đồ: {error}"
+        ) from error
+
 
 @router.post("/report")
 async def create_dashboard_report(request: DashboardReportRequest) -> dict[str, Any]:
     if not is_llm_enabled():
-        raise HTTPException(status_code=503, detail="AI đã tắt trong Settings. Hãy bật lại để tạo báo cáo.")
+        raise HTTPException(
+            status_code=503, detail="AI đã tắt trong Settings. Hãy bật lại để tạo báo cáo."
+        )
     if not settings.gemini_api_key:
         raise HTTPException(status_code=503, detail="Gemini API is not configured")
 
@@ -312,12 +335,17 @@ async def create_dashboard_report(request: DashboardReportRequest) -> dict[str, 
         provider_status = getattr(error, "code", None)
         logger.error(
             "dashboard_report_failed error_type=%s status=%s",
-            type(error).__name__, provider_status,
+            type(error).__name__,
+            provider_status,
         )
         if provider_status == 429:
-            raise HTTPException(status_code=429, detail="Gemini rate limit reached; retry later") from error
+            raise HTTPException(
+                status_code=429, detail="Gemini rate limit reached; retry later"
+            ) from error
         if provider_status in {500, 503, 504}:
-            raise HTTPException(status_code=503, detail="Gemini is temporarily unavailable; retry later") from error
+            raise HTTPException(
+                status_code=503, detail="Gemini is temporarily unavailable; retry later"
+            ) from error
         raise HTTPException(status_code=502, detail="Không thể tạo báo cáo lúc này.") from error
 
     return {
@@ -328,7 +356,9 @@ async def create_dashboard_report(request: DashboardReportRequest) -> dict[str, 
         "charts": [
             {
                 **chart,
-                "screenshot_base64": base64.b64encode(chart_screenshots[chart["id"]]).decode("ascii"),
+                "screenshot_base64": base64.b64encode(chart_screenshots[chart["id"]]).decode(
+                    "ascii"
+                ),
             }
             for chart in dashboard["charts"]
         ],

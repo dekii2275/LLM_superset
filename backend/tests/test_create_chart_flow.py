@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import unittest
@@ -10,8 +11,8 @@ from fastapi import HTTPException
 
 from app.api.ai import execute_action
 from app.schemas.ai import (
-    AIIntent,
     ActionExecutionRequest,
+    AIIntent,
     ChartPlan,
     CreateChartResult,
     CreateDashboardResult,
@@ -66,10 +67,35 @@ class DashboardGemini(CreateChartGemini):
             title="NYC Taxi Overview",
             description="Taxi activity overview.",
             charts=[
-                ChartPlan(title="Trips by Month", chart_type="line", question="Trips by month", metric="trip_count", dimension="month"),
-                ChartPlan(title="Revenue by Month", chart_type="line", question="Revenue by month", metric="total_revenue", dimension="month"),
-                ChartPlan(title="Top Pickup Zones", chart_type="bar", question="Top pickup zones", metric="trip_count", dimension="zone", limit=10),
-                ChartPlan(title="Payment Types", chart_type="pie", question="Payment type distribution", metric="trip_count", dimension="payment_type"),
+                ChartPlan(
+                    title="Trips by Month",
+                    chart_type="line",
+                    question="Trips by month",
+                    metric="trip_count",
+                    dimension="month",
+                ),
+                ChartPlan(
+                    title="Revenue by Month",
+                    chart_type="line",
+                    question="Revenue by month",
+                    metric="total_revenue",
+                    dimension="month",
+                ),
+                ChartPlan(
+                    title="Top Pickup Zones",
+                    chart_type="bar",
+                    question="Top pickup zones",
+                    metric="trip_count",
+                    dimension="zone",
+                    limit=10,
+                ),
+                ChartPlan(
+                    title="Payment Types",
+                    chart_type="pie",
+                    question="Payment type distribution",
+                    metric="trip_count",
+                    dimension="payment_type",
+                ),
             ],
         )
 
@@ -134,10 +160,65 @@ class SupersetPayloadTests(unittest.TestCase):
     def test_dashboard_layout_uses_all_chart_ids(self) -> None:
         layout = self.writer.build_dashboard_layout(
             "NYC Taxi Overview",
-            [{"id": index, "slice_name": f"Chart {index}", "uuid": f"uuid-{index}"} for index in range(1, 5)],
+            [
+                {"id": index, "slice_name": f"Chart {index}", "uuid": f"uuid-{index}"}
+                for index in range(1, 5)
+            ],
         )
         self.assertEqual(layout["ROW-1"]["children"], ["CHART-1", "CHART-2"])
         self.assertEqual(layout["ROW-2"]["children"], ["CHART-3", "CHART-4"])
+
+    def test_payload_for_non_taxi_dataset_with_adhoc_metric(self) -> None:
+        from unittest.mock import MagicMock
+
+        writer = SupersetWriteService("http://superset", "http://public", "u", "p", 5)
+        client = MagicMock()
+        client.get_dataset.return_value = {
+            "columns": [
+                {"column_name": "name"},
+                {"column_name": "population_max"},
+                {"column_name": "country"},
+            ],
+            "metrics": [{"metric_name": "count"}],
+        }
+        payload = writer.build_superset_chart_payload(
+            "Top 10 Populated Places",
+            ChartPlan(
+                title="Top 10 Populated Places",
+                chart_type="bar",
+                question="Top places",
+                dataset_id=5,
+                limit=10,
+            ),
+            VisualizationSpec(type="bar", x_axis="name", y_axis="population_max"),
+            client=client,
+        )
+        self.assertEqual(payload["datasource_id"], 5)
+        self.assertEqual(payload["viz_type"], "echarts_timeseries_bar")
+        self.assertIn("name", payload["params"])
+        self.assertIn("population_max", payload["params"])
+        self.assertIn("SUM(population_max)", payload["params"])
+        query = json.loads(payload["query_context"])["queries"][0]
+        self.assertEqual(
+            query["columns"],
+            [
+                {
+                    "columnType": "BASE_AXIS",
+                    "sqlExpression": "name",
+                    "label": "name",
+                    "expressionType": "SQL",
+                    "isColumnReference": True,
+                }
+            ],
+        )
+
+    def test_editing_bar_keeps_the_guest_compatible_axis(self) -> None:
+        form, context, viz_type = self.writer._edited_chart_config(
+            {}, {}, "bar", "pu_location_id", "count"
+        )
+        self.assertEqual(viz_type, "echarts_timeseries_bar")
+        self.assertEqual(form["columns"], [])
+        self.assertEqual(context["queries"][0]["columns"][0]["sqlExpression"], "pu_location_id")
 
 
 class ExecuteBoundaryTests(unittest.IsolatedAsyncioTestCase):
@@ -155,7 +236,12 @@ class ExecuteBoundaryTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_execute_valid_create_chart_uses_write_service(self) -> None:
-        result = CreateChartResult(success=True, chart_id=42, chart_name="Top Pickup Zones", message="Chart created successfully.")
+        result = CreateChartResult(
+            success=True,
+            chart_id=42,
+            chart_name="Top Pickup Zones",
+            message="Chart created successfully.",
+        )
         with patch("app.api.ai.SupersetWriteService") as writer:
             writer.return_value.create_chart = AsyncMock(return_value=result)
             response = await execute_action(self.request("SELECT 1 AS zone, 2 AS trip_count"))
@@ -164,7 +250,9 @@ class ExecuteBoundaryTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_execute_rejects_unsupported_action_and_unsafe_sql(self) -> None:
         with self.assertRaises(HTTPException) as unsupported:
-            await execute_action(self.request("SELECT 1 AS zone, 2 AS trip_count", AIIntent.EDIT_DASHBOARD))
+            await execute_action(
+                self.request("SELECT 1 AS zone, 2 AS trip_count", AIIntent.EDIT_DASHBOARD)
+            )
         # EDIT_DASHBOARD is now supported, but still needs a semantic plan.
         self.assertEqual(unsupported.exception.status_code, 422)
         with self.assertRaises(HTTPException) as unsafe:
@@ -175,13 +263,19 @@ class ExecuteBoundaryTests(unittest.IsolatedAsyncioTestCase):
         plan = DashboardGemini().generate_dashboard_plan("dashboard")
         plan = await plan
         result = CreateDashboardResult(
-            success=True, dashboard_id=7, dashboard_uuid="uuid-7", dashboard_name=plan.title,
-            chart_ids=[12, 13, 14, 15], message="Dashboard created successfully.",
+            success=True,
+            dashboard_id=7,
+            dashboard_uuid="uuid-7",
+            dashboard_name=plan.title,
+            chart_ids=[12, 13, 14, 15],
+            message="Dashboard created successfully.",
         )
         request = ActionExecutionRequest(action=AIIntent.CREATE_DASHBOARD, dashboard_plan=plan)
         with (
             patch("app.api.ai.is_llm_enabled", return_value=True),
-            patch("app.api.ai.AIBIService.prepare_dashboard_charts", new=AsyncMock(return_value=[])),
+            patch(
+                "app.api.ai.AIBIService.prepare_dashboard_charts", new=AsyncMock(return_value=[])
+            ),
             patch("app.api.ai.SupersetWriteService") as writer,
         ):
             writer.return_value.create_dashboard = AsyncMock(return_value=result)
@@ -194,13 +288,103 @@ class ExecuteBoundaryTests(unittest.IsolatedAsyncioTestCase):
         request = ActionExecutionRequest(action=AIIntent.CREATE_DASHBOARD, dashboard_plan=plan)
         with (
             patch("app.api.ai.is_llm_enabled", return_value=True),
-            patch("app.api.ai.AIBIService.prepare_dashboard_charts", new=AsyncMock(side_effect=RuntimeError("Chart 2 failed"))),
+            patch(
+                "app.api.ai.AIBIService.prepare_dashboard_charts",
+                new=AsyncMock(side_effect=RuntimeError("Chart 2 failed")),
+            ),
             patch("app.api.ai.SupersetWriteService") as writer,
         ):
             response = await execute_action(request)
         self.assertFalse(response.success)
         self.assertIsNone(response.result)
         writer.return_value.create_dashboard.assert_not_called()
+
+    def test_build_superset_chart_payload_map(self) -> None:
+        service = SupersetWriteService(
+            "http://superset:8088", "http://localhost:59088", "admin", "password", 5
+        )
+        # 1. deck_scatter when lat/lon present
+        plan_geo = ChartPlan(
+            title="World Populated Places Map",
+            chart_type="map",
+            question="Show cities on map",
+            metric="population_max",
+            dimension="name",
+            dataset_id=5,
+        )
+        mock_meta_geo = {
+            "columns": [
+                {"column_name": "name"},
+                {"column_name": "latitude"},
+                {"column_name": "longitude"},
+                {"column_name": "population_max"},
+            ],
+            "metrics": [],
+        }
+
+        class MockClient:
+            def get_dataset(self, did: int):
+                return mock_meta_geo
+
+        payload_geo = service.build_superset_chart_payload(
+            "World Cities Map", plan_geo, VisualizationSpec(type="map"), client=MockClient()
+        )
+        self.assertEqual(payload_geo["viz_type"], "deck_scatter")
+
+        # 2. world_map when country/iso present and country requested
+        plan_country = ChartPlan(
+            title="Country Population Distribution",
+            chart_type="map",
+            question="Country population map",
+            metric="population_max",
+            dimension="country_iso_a2",
+            dataset_id=5,
+        )
+        mock_meta_country = {
+            "columns": [
+                {"column_name": "country_iso_a2"},
+                {"column_name": "population_max"},
+            ],
+            "metrics": [],
+        }
+
+        class MockClientCountry:
+            def get_dataset(self, did: int):
+                return mock_meta_country
+
+        payload_country = service.build_superset_chart_payload(
+            "Country Pop Map",
+            plan_country,
+            VisualizationSpec(type="map"),
+            client=MockClientCountry(),
+        )
+        self.assertEqual(payload_country["viz_type"], "world_map")
+
+    def test_dashboard_plan_chart_count_2_to_8(self) -> None:
+        def make_chart(i: int) -> ChartPlan:
+            return ChartPlan(
+                title=f"Chart {i}",
+                chart_type="bar",
+                question=f"Q {i}",
+                metric="count",
+                dimension="name",
+            )
+
+        # 2 charts: valid
+        plan_2 = DashboardPlan(title="Plan 2", charts=[make_chart(1), make_chart(2)])
+        self.assertEqual(len(plan_2.charts), 2)
+        # 6 charts: valid
+        plan_6 = DashboardPlan(title="Plan 6", charts=[make_chart(i) for i in range(1, 7)])
+        self.assertEqual(len(plan_6.charts), 6)
+        # 1 chart: invalid
+        with self.assertRaises(Exception):
+            DashboardPlan(title="Plan 1", charts=[make_chart(1)])
+        # 8 charts: valid after adding a chart to a six-chart draft
+        plan_8 = DashboardPlan(title="Plan 8", charts=[make_chart(i) for i in range(1, 9)])
+        self.assertEqual(len(plan_8.charts), 8)
+        # 9 charts: invalid
+        with self.assertRaises(Exception):
+            DashboardPlan(title="Plan 9", charts=[make_chart(i) for i in range(1, 10)])
 
 
 if __name__ == "__main__":

@@ -10,17 +10,33 @@ Gemini-assisted analysis.
 - Preview query results and charts in the chat.
 - Create charts and dashboards in Superset after an explicit confirmation.
 - Embed the live Superset dashboard in the application.
+- Upload CSV/Parquet datasets and select the dataset used for analysis.
+- Manage business glossary terms, verified metrics, and saved chat sessions.
+- Export dashboard reports and view demo user/RLS and anomaly-alert flows.
 
 The application is designed around the `ai_bi` PostgreSQL database and the
 `raw.yellow_taxi_trips` table. Superset metadata is stored separately in the
 `superset` database.
 
+## Project structure
+
+| Directory | Purpose |
+| --- | --- |
+| `backend/` | FastAPI routes, analytics services, and unit tests |
+| `frontend/` | Next.js application and report-generation test |
+| `database/` | PostgreSQL initialization and data import/profile tools |
+| `superset/` | Superset image, configuration, and dashboard setup scripts |
+| `deploy/` | Production Nginx gateway configuration |
+| `scripts/` | Repository checks and live demo preflight |
+| `data/` | Small public references; private inputs/exports are ignored |
+| `docs/` | Deployment, integration, and feature documentation |
+
 ## Requirements
 
 - Git
 - Docker Engine or Docker Desktop with Docker Compose v2
-- Node.js 22+ with npm, and `uv` for the native frontend/backend workflow
-- Optional: Python 3 for the Superset setup script
+- Node.js 22.21 with npm (see `.nvmrc`)
+- Python 3.12 for the backend and setup scripts
 
 ## Repository and data policy
 
@@ -53,6 +69,10 @@ for the current PostgreSQL archive format.
    - `SUPERSET_SECRET_KEY`
    - `SUPERSET_GUEST_TOKEN_JWT_SECRET`
    - `SUPERSET_ANALYTICS_DB_PASSWORD`
+   - `JWT_SECRET_KEY` (at least 32 characters; also required by Compose)
+
+   Keep the password in `DATABASE_URL` consistent with `POSTGRES_PASSWORD`.
+   Generate signing keys with `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
 
    Set `GEMINI_API_KEY` to enable the AI chat. The stack still starts without
    it, but `/api/v1/ai/chat` is unavailable.
@@ -64,7 +84,7 @@ for the current PostgreSQL archive format.
    ```
 
 4. Start the Docker services. By default this starts PostgreSQL, Redis, Superset,
-   and the Superset MCP server. The frontend and backend run natively below.
+   its screenshot worker, and the Superset MCP server. The frontend and backend run natively below.
 
    ```powershell
    docker compose --env-file .env.local up -d
@@ -75,17 +95,13 @@ for the current PostgreSQL archive format.
 
    ```powershell
    # Backend: create one virtual environment at the repository root
-   $repo = (Get-Location).Path
-   $env:UV_CACHE_DIR = Join-Path $repo ".uv-cache"
-   $env:UV_PYTHON_INSTALL_DIR = Join-Path $repo ".uv-python"
-   uv venv --python 3.12
-   uv pip install --python .venv\Scripts\python.exe -r backend\requirements.txt
+   py -3.12 -m venv .venv
+   .venv\Scripts\python.exe -m pip install -r backend\requirements-dev.txt
 
    # Frontend: install dependencies and save its browser URLs
    Set-Location frontend
-   $env:npm_config_cache = Join-Path $repo ".npm-cache"
    Copy-Item local.env.example .env.local
-   npm ci
+   npm.cmd ci
    ```
 
    The backend reads the repository `.env.local` automatically. Its `DATABASE_URL`,
@@ -99,22 +115,22 @@ for the current PostgreSQL archive format.
 
    ```powershell
    Set-Location backend
-   & ..\.venv\Scripts\Activate.ps1
-   uvicorn app.main:app --host 127.0.0.1 --port 48123 --reload
+   ..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 48123 --reload
    ```
 
    **Frontend terminal:**
 
    ```powershell
    Set-Location frontend
-   npm run dev
+   npm.cmd run dev
    ```
 
-   The backend terminal activates the already-created root `.venv`, then runs
+   The backend uses the already-created root `.venv` and runs
    `uvicorn` from the backend directory. The backend reads the repository `.env.local`
    automatically; no environment variables need to be re-entered at startup.
-   Run `uv pip install --python ..\.venv\Scripts\python.exe -r requirements.txt`
-   or `npm ci` again only after changing that app's dependencies.
+   Reinstall Python dependencies or run `npm.cmd ci` after changing that app's
+   dependency files. On Linux/macOS, use `python3.12 -m venv .venv`,
+   `.venv/bin/python`, and `npm` instead of the Windows commands.
 
 7. Initialize the Superset dataset and demo dashboard after Superset is
    healthy.
@@ -214,6 +230,11 @@ intended. The default limits each input file to 10,000 rows for the demo.
 
 ## Operations
 
+Before a live walkthrough, run `python scripts/demo_preflight.py` and follow
+the [demo and acceptance checklist](docs/demo-acceptance.md). The preflight
+checks the running services, selected dataset, dashboard embed setup, and
+frontend route without changing application data.
+
 ```powershell
 # Service status and logs
 docker compose --env-file .env.local ps
@@ -239,15 +260,19 @@ The production overlay publishes one gateway on TCP port `55200`:
 
 ```dotenv
 APP_ENV=production
-FRONTEND_URL=http://18.143.137.242:55200
-FRONTEND_ORIGINS=http://18.143.137.242:55200
-NEXT_PUBLIC_API_URL=http://18.143.137.242:55200
-NEXT_PUBLIC_SUPERSET_URL=http://18.143.137.242:55200/superset
-SUPERSET_PUBLIC_URL=http://18.143.137.242:55200/superset
+FRONTEND_URL=http://<server-ip>:55200
+FRONTEND_ORIGINS=http://<server-ip>:55200
+NEXT_PUBLIC_API_URL=http://<server-ip>:55200
+NEXT_PUBLIC_SUPERSET_URL=http://<server-ip>:55200/superset
+SUPERSET_PUBLIC_URL=http://<server-ip>:55200/superset
 SUPERSET_APP_ROOT=/superset
 ENABLE_PROXY_FIX=true
 ```
 
+Set `GHCR_NAMESPACE` in `.env.prod` to the lowercase owner of the published
+container images, and supply a unique `JWT_SECRET_KEY` of at least 32 characters.
+Image publishing requires `PUBLISH_ENABLED=true` in GitHub repository variables;
+server deployment additionally requires `DEPLOY_ENABLED=true`.
 The CI/CD workflow reads `.env.prod` on the VM. Full deployment steps and
 security notes are in [docs/deployment.md](docs/deployment.md).
 
@@ -255,12 +280,19 @@ security notes are in [docs/deployment.md](docs/deployment.md).
 
 - Never commit `.env.local`, `.env.prod`, database dumps, raw Parquet files, or exported tokens.
 - Set distinct, strong Superset and PostgreSQL secrets for every environment.
-- The app has no end-user authentication yet. Do not expose it publicly until
-  authentication, authorization, and row-level security are configured.
+- Authentication and RLS currently demonstrate local user flows. Startup seeds
+  demo accounts (`admin` / `admin123` and manager accounts / `pass123`), and the
+  frontend includes a demo quick switcher. Some API routes permit anonymous
+  access. Replace this demo authentication and audit endpoint authorization
+  before using private data or making the service publicly accessible.
+- Production requires an explicit `JWT_SECRET_KEY`; development without a key
+  generates a process-local key, so tokens expire across process restarts.
 - Do not expose the MCP port (`55008`) outside localhost.
 
 ## Further documentation
 
+- [GitHub publishing guide](docs/github-publishing.md)
+- [Development and checks](CONTRIBUTING.md)
 - [Deployment guide](docs/deployment.md)
 - [CI/CD setup](docs/ci-cd.md)
 - [Data export and restore guide](data/exports/README.md)

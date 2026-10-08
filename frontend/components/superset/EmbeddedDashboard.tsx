@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { embedDashboard, type EmbeddedDashboard as SupersetEmbeddedDashboard } from "@superset-ui/embedded-sdk";
+import {
+  embedDashboard,
+  type EmbeddedDashboard as SupersetEmbeddedDashboard,
+} from "@superset-ui/embedded-sdk";
 import { apiUrl, getSupersetCharts } from "@/lib/api";
 import { Icon } from "@/components/ui/Icon";
 import { ChartExplanationModal } from "./ChartExplanationModal";
@@ -72,25 +75,23 @@ async function createPdf(element: HTMLElement): Promise<Blob> {
   const margin = 36;
   const contentWidth = pdf.internal.pageSize.getWidth() - margin * 2;
   const contentHeight = pdf.internal.pageSize.getHeight() - margin * 2;
-  const sourcePageHeight = Math.floor(canvas.width * contentHeight / contentWidth);
+  const sourcePageHeight = Math.floor((canvas.width * contentHeight) / contentWidth);
 
   for (let top = 0; top < canvas.height; top += sourcePageHeight) {
     if (top > 0) pdf.addPage();
     const slice = document.createElement("canvas");
     slice.width = canvas.width;
     slice.height = Math.min(sourcePageHeight, canvas.height - top);
-    slice.getContext("2d")?.drawImage(
-      canvas,
-      0, top, canvas.width, slice.height,
-      0, 0, canvas.width, slice.height,
-    );
+    slice
+      .getContext("2d")
+      ?.drawImage(canvas, 0, top, canvas.width, slice.height, 0, 0, canvas.width, slice.height);
     pdf.addImage(
       slice.toDataURL("image/jpeg", 0.94),
       "JPEG",
       margin,
       margin,
       contentWidth,
-      slice.height * contentWidth / canvas.width,
+      (slice.height * contentWidth) / canvas.width,
     );
   }
 
@@ -99,13 +100,15 @@ async function createPdf(element: HTMLElement): Promise<Blob> {
 
 async function waitForReportCharts(element: HTMLElement): Promise<void> {
   const images = Array.from(element.querySelectorAll<HTMLImageElement>(".dashboard-report-image"));
-  await Promise.all(images.map(async (image) => {
-    try {
-      await image.decode();
-    } catch {
-      throw new Error(`Không thể tải biểu đồ “${image.alt}” để xuất PDF.`);
-    }
-  }));
+  await Promise.all(
+    images.map(async (image) => {
+      try {
+        await image.decode();
+      } catch {
+        throw new Error(`Không thể tải biểu đồ “${image.alt}” để xuất PDF.`);
+      }
+    }),
+  );
 }
 
 function downloadReport(blob: Blob, filename: string) {
@@ -119,7 +122,12 @@ function downloadReport(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function EmbeddedDashboard({ onClose, dashboardId, title, variant = "page" }: EmbeddedDashboardProps) {
+export function EmbeddedDashboard({
+  onClose,
+  dashboardId,
+  title,
+  variant = "page",
+}: EmbeddedDashboardProps) {
   const mountPoint = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const dashboardClient = useRef<SupersetEmbeddedDashboard | null>(null);
@@ -135,9 +143,14 @@ export function EmbeddedDashboard({ onClose, dashboardId, title, variant = "page
     setReport(null);
     setReportError(null);
     setReportFormat(format);
-    const fileType = format === "pdf"
-      ? { label: "PDF", mime: "application/pdf", extension: ".pdf" }
-      : { label: "DOCX", mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", extension: ".docx" };
+    const fileType =
+      format === "pdf"
+        ? { label: "PDF", mime: "application/pdf", extension: ".pdf" }
+        : {
+            label: "DOCX",
+            mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            extension: ".docx",
+          };
     const filename = `Bao-cao-dashboard${fileType.extension}`;
     setReportStatus(`Chọn nơi lưu báo cáo ${fileType.label}…`);
     setReportLoading(true);
@@ -148,7 +161,12 @@ export function EmbeddedDashboard({ onClose, dashboardId, title, variant = "page
         try {
           fileHandle = await saveWindow.showSaveFilePicker({
             suggestedName: filename,
-            types: [{ description: `Tài liệu ${fileType.label}`, accept: { [fileType.mime]: [fileType.extension] } }],
+            types: [
+              {
+                description: `Tài liệu ${fileType.label}`,
+                accept: { [fileType.mime]: [fileType.extension] },
+              },
+            ],
           });
         } catch (pickerError) {
           if (pickerError instanceof DOMException && pickerError.name === "AbortError") {
@@ -174,7 +192,9 @@ export function EmbeddedDashboard({ onClose, dashboardId, title, variant = "page
       setReport(reportData);
       let reportBlob: Blob;
       if (format === "pdf") {
-        await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
         if (!reportElement.current) throw new Error("Không tìm thấy nội dung báo cáo để xuất PDF.");
         const reportNode = reportElement.current;
         reportNode.style.left = "0px";
@@ -221,7 +241,9 @@ export function EmbeddedDashboard({ onClose, dashboardId, title, variant = "page
 
     async function mountDashboard() {
       try {
-        const resource = dashboardId ? `/api/v1/superset/dashboard/${dashboardId}` : "/api/v1/superset";
+        const resource = dashboardId
+          ? `/api/v1/superset/dashboard/${dashboardId}`
+          : "/api/v1/superset";
         const config = await getJson<EmbedConfig>(`${resource}/embed-config`);
         if (cancelled || !mountPoint.current) return;
 
@@ -296,9 +318,7 @@ export function EmbeddedDashboard({ onClose, dashboardId, title, variant = "page
   );
 
   // Top highlight charts for quick pills (prefer non-kpi charts like pie, bar, line)
-  const quickPillCharts = charts
-    .filter((c) => c.viz_type !== "kpi")
-    .slice(0, 4);
+  const quickPillCharts = charts.filter((c) => c.viz_type !== "kpi").slice(0, 4);
 
   return (
     <>
@@ -325,13 +345,15 @@ export function EmbeddedDashboard({ onClose, dashboardId, title, variant = "page
               >
                 <Icon name="sparkle" size={16} />
                 <span>✦ AI Giải thích biểu đồ có sẵn</span>
-                <span className="superset-badge-count">
-                  {loadingCharts ? "…" : charts.length}
-                </span>
+                <span className="superset-badge-count">{loadingCharts ? "…" : charts.length}</span>
               </button>
 
               {showChartDropdown && (
-                <div className="superset-charts-dropdown" role="dialog" aria-label="Danh sách biểu đồ giải thích">
+                <div
+                  className="superset-charts-dropdown"
+                  role="dialog"
+                  aria-label="Danh sách biểu đồ giải thích"
+                >
                   <div className="superset-dropdown-top">
                     <strong>Chọn biểu đồ cần AI giải thích</strong>
                     <p>Hệ thống sẽ lấy dữ liệu thực tế và phân tích xu hướng</p>
@@ -347,7 +369,9 @@ export function EmbeddedDashboard({ onClose, dashboardId, title, variant = "page
 
                   <div className="superset-dropdown-list">
                     {loadingCharts ? (
-                      <p className="superset-dropdown-empty">Đang tải danh sách biểu đồ từ Superset…</p>
+                      <p className="superset-dropdown-empty">
+                        Đang tải danh sách biểu đồ từ Superset…
+                      </p>
                     ) : filteredCharts.length === 0 ? (
                       <p className="superset-dropdown-empty">
                         {charts.length === 0
@@ -369,10 +393,10 @@ export function EmbeddedDashboard({ onClose, dashboardId, title, variant = "page
                             {item.viz_type === "pie"
                               ? "🥧"
                               : item.viz_type === "line"
-                              ? "📈"
-                              : item.viz_type === "kpi"
-                              ? "🎯"
-                              : "📊"}
+                                ? "📈"
+                                : item.viz_type === "kpi"
+                                  ? "🎯"
+                                  : "📊"}
                           </span>
                           <div className="superset-dropdown-item-info">
                             <span className="superset-dropdown-item-title">{item.slice_name}</span>
@@ -380,10 +404,10 @@ export function EmbeddedDashboard({ onClose, dashboardId, title, variant = "page
                               {item.viz_type === "kpi"
                                 ? "Chỉ số tổng hợp"
                                 : item.viz_type === "pie"
-                                ? "Biểu đồ tròn"
-                                : item.viz_type === "line"
-                                ? "Biểu đồ đường"
-                                : "Biểu đồ cột"}
+                                  ? "Biểu đồ tròn"
+                                  : item.viz_type === "line"
+                                    ? "Biểu đồ đường"
+                                    : "Biểu đồ cột"}
                             </span>
                           </div>
                           <span className="superset-dropdown-item-arrow">Giải thích ✦</span>
@@ -395,15 +419,34 @@ export function EmbeddedDashboard({ onClose, dashboardId, title, variant = "page
               )}
             </div>
 
-            <details className="superset-report-menu" onClick={(event) => { if (reportLoading) event.preventDefault(); }}>
+            <details
+              className="superset-report-menu"
+              onClick={(event) => {
+                if (reportLoading) event.preventDefault();
+              }}
+            >
               <summary className="superset-report-button" aria-disabled={reportLoading}>
                 {reportLoading ? `Đang tạo báo cáo ${reportFormat.toUpperCase()}…` : "Tạo báo cáo"}
               </summary>
               <div className="superset-report-options">
-                <button type="button" onClick={(event) => { event.currentTarget.closest("details")!.open = false; void createReport("pdf"); }} disabled={reportLoading}>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.currentTarget.closest("details")!.open = false;
+                    void createReport("pdf");
+                  }}
+                  disabled={reportLoading}
+                >
                   PDF (.pdf)
                 </button>
-                <button type="button" onClick={(event) => { event.currentTarget.closest("details")!.open = false; void createReport("docx"); }} disabled={reportLoading}>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.currentTarget.closest("details")!.open = false;
+                    void createReport("docx");
+                  }}
+                  disabled={reportLoading}
+                >
                   DOCX (.docx)
                 </button>
               </div>
@@ -414,8 +457,16 @@ export function EmbeddedDashboard({ onClose, dashboardId, title, variant = "page
             </button>
           </div>
         </div>
-        {reportError && <p className="superset-embed-error" role="alert">{reportError}</p>}
-        {(reportLoading || reportStatus) && <p className="superset-report-status" role="status">{reportStatus}</p>}
+        {reportError && (
+          <p className="superset-embed-error" role="alert">
+            {reportError}
+          </p>
+        )}
+        {(reportLoading || reportStatus) && (
+          <p className="superset-report-status" role="status">
+            {reportStatus}
+          </p>
+        )}
 
         {quickPillCharts.length > 0 && (
           <div className="superset-quick-bar" aria-label="Các biểu đồ gợi ý giải thích">
@@ -430,9 +481,7 @@ export function EmbeddedDashboard({ onClose, dashboardId, title, variant = "page
                   className="superset-quick-chip"
                   onClick={() => setSelectedChart(c)}
                 >
-                  <span>
-                    {c.viz_type === "pie" ? "🥧" : c.viz_type === "line" ? "📈" : "📊"}
-                  </span>
+                  <span>{c.viz_type === "pie" ? "🥧" : c.viz_type === "line" ? "📈" : "📊"}</span>
                   <span className="superset-chip-text">{c.slice_name}</span>
                 </button>
               ))}
@@ -450,7 +499,9 @@ export function EmbeddedDashboard({ onClose, dashboardId, title, variant = "page
           <article ref={reportElement} className="dashboard-report" aria-label="Báo cáo dashboard">
             <h1>{report.dashboard_title}</h1>
             <h2>Báo cáo phân tích dashboard</h2>
-            <p className="dashboard-report-meta">Tạo lúc {new Date(report.generated_at).toLocaleString("vi-VN")}</p>
+            <p className="dashboard-report-meta">
+              Tạo lúc {new Date(report.generated_at).toLocaleString("vi-VN")}
+            </p>
             <p className="dashboard-report-note">
               Tab: {report.active_tab_title || "Dashboard"}
               <br />
@@ -463,12 +514,16 @@ export function EmbeddedDashboard({ onClose, dashboardId, title, variant = "page
               <p>{report.analysis.overview}</p>
               {report.analysis.highlights.length > 0 && (
                 <ul>
-                  {report.analysis.highlights.map((highlight, index) => <li key={index}>{highlight}</li>)}
+                  {report.analysis.highlights.map((highlight, index) => (
+                    <li key={index}>{highlight}</li>
+                  ))}
                 </ul>
               )}
             </section>
             {report.charts.map((chart) => {
-              const insight = report.analysis.chart_insights.find((item) => item.chart_id === chart.id);
+              const insight = report.analysis.chart_insights.find(
+                (item) => item.chart_id === chart.id,
+              );
               return (
                 <section className="dashboard-report-chart-section" key={chart.id}>
                   <h3>{chart.title}</h3>
@@ -481,7 +536,12 @@ export function EmbeddedDashboard({ onClose, dashboardId, title, variant = "page
                     />
                   )}
                   {chart.unavailable && <p>Không lấy được dữ liệu biểu đồ.</p>}
-                  {chart.truncated && <p className="dashboard-report-chart-note">Biểu đồ hiển thị {chart.rows.length} dòng mẫu trên tổng số {chart.row_count} dòng.</p>}
+                  {chart.truncated && (
+                    <p className="dashboard-report-chart-note">
+                      Biểu đồ hiển thị {chart.rows.length} dòng mẫu trên tổng số {chart.row_count}{" "}
+                      dòng.
+                    </p>
+                  )}
                 </section>
               );
             })}
@@ -490,11 +550,7 @@ export function EmbeddedDashboard({ onClose, dashboardId, title, variant = "page
       </section>
 
       {/* Pop-up Modal hiển thị giải thích của AI */}
-      <ChartExplanationModal
-        chart={selectedChart}
-        onClose={() => setSelectedChart(null)}
-      />
+      <ChartExplanationModal chart={selectedChart} onClose={() => setSelectedChart(null)} />
     </>
   );
 }
-
