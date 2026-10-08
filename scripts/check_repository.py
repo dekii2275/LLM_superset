@@ -21,6 +21,48 @@ SECRET_PATTERNS = {
     "AWS access key": re.compile(rb"(?:AKIA|ASIA)[A-Z0-9]{16}"),
 }
 
+CREDENTIAL_NAME = r"(?:[A-Za-z0-9_]*(?:password|passwd|secret_key|jwt_secret)[A-Za-z0-9_]*|pwd)"
+CREDENTIAL_PATTERNS = (
+    re.compile(
+        rf"\b{CREDENTIAL_NAME}[\"']?[ \t]*(?::[ \t]*str[ \t]*)?(?:=|:)[ \t]*[\"']([^\"'\r\n]+)[\"']",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"^[ \t]*{CREDENTIAL_NAME}[ \t]*[:=][ \t]*([A-Za-z0-9_!@#%^&+./=:-]+)[ \t]*$",
+        re.IGNORECASE | re.MULTILINE,
+    ),
+    re.compile(r"\bhash_password\([ \t]*[\"']([^\"'\r\n]+)[\"']"),
+    re.compile(r"\blogin\([ \t]*[\"'][^\"']+[\"'][ \t]*,[ \t]*[\"']([^\"'\r\n]+)[\"']"),
+)
+
+
+def credential_findings(name: str, body: bytes) -> list[tuple[int, str]]:
+    """Flag credential literals outside examples/tests, without returning their values."""
+    path = Path(name)
+    if (
+        "tests" in path.parts
+        or path.name.startswith("test_")
+        or ".test." in path.name
+        or path.name.endswith("env.example")
+        or path.suffix == ".md"
+    ):
+        return []
+    source = body.decode("utf-8", errors="replace")
+    findings = set()
+    for index, pattern in enumerate(CREDENTIAL_PATTERNS):
+        if (
+            index == 1
+            and path.suffix not in {".yml", ".yaml", ".sh"}
+            and not path.name.startswith(".env")
+        ):
+            continue
+        for match in pattern.finditer(source):
+            value = match.group(1)
+            if not value or value.startswith(("replace_", "your_", "${", "$", "{{")):
+                continue
+            findings.add((source.count("\n", 0, match.start()) + 1, "hardcoded credential"))
+    return sorted(findings)
+
 
 def main() -> int:
     result = subprocess.run(
@@ -51,6 +93,8 @@ def main() -> int:
         for label, pattern in SECRET_PATTERNS.items():
             if pattern.search(body):
                 issues.append((name, f"possible {label}"))
+        for line, reason in credential_findings(name, body):
+            issues.append((f"{name}:{line}", reason))
     for name, reason in issues:
         print(f"[FAIL] {name}: {reason}")
     if issues:

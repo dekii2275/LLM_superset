@@ -9,9 +9,9 @@ type AuthContextType = {
   loading: boolean;
   demoUsers: UserProfile[];
   login: (username: string, password: string) => Promise<void>;
-  loginAsAdmin: () => Promise<void>;
   logout: () => void;
   quickSwitchUser: (user: UserProfile) => Promise<void>;
+  loginUsername: string;
   isLoginModalOpen: boolean;
   setIsLoginModalOpen: (open: boolean) => void;
 };
@@ -23,6 +23,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState<boolean>(true);
   const [demoUsers, setDemoUsers] = useState<UserProfile[]>([]);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
+  const [loginUsername, setLoginUsername] = useState("");
 
   useEffect(() => {
     async function initAuth() {
@@ -54,29 +55,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const loginAsAdmin = async () => {
-    return login("admin", "admin123");
-  };
-
   const logout = () => {
     setAuthToken(null);
     setUser(null);
     setIsLoginModalOpen(false);
+    setLoginUsername("");
   };
 
   const quickSwitchUser = async (targetUser: UserProfile) => {
-    setLoading(true);
-    try {
-      const password = targetUser.username === "admin" ? "admin123" : "pass123";
-      const res = await loginApi(targetUser.username, password);
-      setAuthToken(res.token);
-      setUser(res.user);
-      setIsLoginModalOpen(false);
-    } catch (e) {
-      console.error("Quick switch failed:", e);
-    } finally {
-      setLoading(false);
-    }
+    setLoginUsername(targetUser.username);
+    setIsLoginModalOpen(true);
   };
 
   return (
@@ -86,9 +74,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         demoUsers,
         login,
-        loginAsAdmin,
         logout,
         quickSwitchUser,
+        loginUsername,
         isLoginModalOpen,
         setIsLoginModalOpen,
       }}

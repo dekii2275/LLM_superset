@@ -45,9 +45,11 @@ jobs:
           DATABASE_URL: postgresql+psycopg://user:password@localhost:5432/ai_bi
           GEMINI_API_KEY: ci-placeholder-key
           REDIS_URL: redis://127.0.0.1:6379/15
-          JWT_SECRET_KEY: ci-only-jwt-key-with-at-least-32-characters
           PYTHONPATH: backend
-        run: python -m unittest discover -s backend/tests -v
+        run: |
+          export JWT_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+          echo "::add-mask::$JWT_SECRET_KEY"
+          python -m unittest discover -s backend/tests -v
 
       - uses: actions/setup-node@v7
         with:

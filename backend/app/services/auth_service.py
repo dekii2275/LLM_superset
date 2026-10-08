@@ -99,16 +99,60 @@ class AuthService:
     """Authentication and User management service."""
 
     @staticmethod
+    def rotate_bootstrap_passwords() -> int:
+        """Explicitly rotate existing seeded users using private environment values."""
+        admin_password = settings.app_admin_password
+        manager_password = settings.app_manager_password
+        if (
+            not admin_password
+            or not manager_password
+            or not admin_password.get_secret_value()
+            or not manager_password.get_secret_value()
+        ):
+            raise ValueError(
+                "Configure APP_ADMIN_PASSWORD and APP_MANAGER_PASSWORD before rotation"
+            )
+        updated = 0
+        with engine.begin() as conn:
+            for username, password in (
+                ("admin", admin_password),
+                ("user_manhattan", manager_password),
+                ("user_queens", manager_password),
+                ("user_asia", manager_password),
+            ):
+                result = conn.execute(
+                    text(
+                        "UPDATE public.users SET password_hash = :password_hash WHERE username = :username"
+                    ),
+                    {
+                        "username": username,
+                        "password_hash": hash_password(password.get_secret_value()),
+                    },
+                )
+                updated += result.rowcount
+        return updated
+
+    @staticmethod
     def seed_default_users() -> None:
-        """Seed default enterprise demo users and RLS rules."""
+        """Seed users only when private bootstrap passwords have been configured."""
+        admin_password = settings.app_admin_password
+        manager_password = settings.app_manager_password
+        if not admin_password or not manager_password:
+            logger.info(
+                "User bootstrap skipped: configure APP_ADMIN_PASSWORD and APP_MANAGER_PASSWORD"
+            )
+            return
+        if not admin_password.get_secret_value() or not manager_password.get_secret_value():
+            logger.info("User bootstrap skipped: bootstrap passwords are empty")
+            return
         try:
             with engine.begin() as conn:
                 count = conn.execute(text("SELECT COUNT(*) FROM public.users;")).scalar() or 0
                 if count == 0:
-                    admin_hash = hash_password("admin123")
-                    manhattan_hash = hash_password("pass123")
-                    queens_hash = hash_password("pass123")
-                    asia_hash = hash_password("pass123")
+                    admin_hash = hash_password(admin_password.get_secret_value())
+                    manhattan_hash = hash_password(manager_password.get_secret_value())
+                    queens_hash = hash_password(manager_password.get_secret_value())
+                    asia_hash = hash_password(manager_password.get_secret_value())
 
                     conn.execute(
                         text("""

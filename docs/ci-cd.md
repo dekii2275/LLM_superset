@@ -76,7 +76,7 @@ If you change the IP, update the GitHub repository variables
 `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SUPERSET_URL`, then push a new commit.
 
 This IP-only endpoint uses plain HTTP and the app has demo authentication with
-known demo passwords and some anonymous APIs. Replace the demo login, audit
+demo account management and some anonymous APIs. Replace the demo login, audit
 authorization, and configure TLS before exposing private data.
 
 Copy `.env.prod` with the supplied SSH key and restrict its permissions:

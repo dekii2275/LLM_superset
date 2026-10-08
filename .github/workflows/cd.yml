@@ -151,13 +151,9 @@ jobs:
         run: |
           cat > .env.smoke <<'EOF'
           POSTGRES_USER=ci
-          POSTGRES_PASSWORD=ci_smoke_password
           APP_DB_NAME=ai_bi
           SUPERSET_DB_NAME=superset
-          SUPERSET_SECRET_KEY=ci-smoke-secret-key-with-more-than-32-characters
-          JWT_SECRET_KEY=ci-smoke-jwt-key-with-more-than-32-characters
           SUPERSET_ADMIN_USERNAME=ciadmin
-          SUPERSET_ADMIN_PASSWORD=ci_smoke_admin_password
           SUPERSET_ADMIN_EMAIL=ci@example.com
           SUPERSET_APP_ROOT=/superset
           ENABLE_PROXY_FIX=true
@@ -169,6 +165,26 @@ jobs:
           MCP_DEV_USERNAME=ciadmin
           GEMINI_API_KEY=
           EOF
+          python3 - <<'PY'
+          import os
+          import secrets
+          from pathlib import Path
+
+          # Credentials exist only for this disposable stack and are never committed.
+          keys = (
+              "POSTGRES_PASSWORD",
+              "SUPERSET_ADMIN_PASSWORD",
+              "SUPERSET_SECRET_KEY",
+              "SUPERSET_GUEST_TOKEN_JWT_SECRET",
+              "JWT_SECRET_KEY",
+          )
+          with Path(".env.smoke").open("a", encoding="utf-8") as env_file:
+              for key in keys:
+                  value = secrets.token_urlsafe(48)
+                  print(f"::add-mask::{value}")
+                  env_file.write(f"{key}={value}\n")
+          os.chmod(".env.smoke", 0o600)
+          PY
           compose=(docker compose --env-file .env.smoke -f docker-compose.yml -f docker-compose.prod.yml)
           timeout --kill-after=15s 5m "${compose[@]}" pull backend frontend superset public-gateway
 

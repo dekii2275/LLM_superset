@@ -70,6 +70,7 @@ for the current PostgreSQL archive format.
    - `SUPERSET_GUEST_TOKEN_JWT_SECRET`
    - `SUPERSET_ANALYTICS_DB_PASSWORD`
    - `JWT_SECRET_KEY` (at least 32 characters; also required by Compose)
+   - `APP_ADMIN_PASSWORD` and `APP_MANAGER_PASSWORD` (private app login bootstrap values)
 
    Keep the password in `DATABASE_URL` consistent with `POSTGRES_PASSWORD`.
    Generate signing keys with `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
@@ -281,13 +282,17 @@ security notes are in [docs/deployment.md](docs/deployment.md).
 - Never commit `.env.local`, `.env.prod`, database dumps, raw Parquet files, or exported tokens.
 - Set distinct, strong Superset and PostgreSQL secrets for every environment.
 - Authentication and RLS currently demonstrate local user flows. Startup seeds
-  demo accounts (`admin` / `admin123` and manager accounts / `pass123`), and the
-  frontend includes a demo quick switcher. Some API routes permit anonymous
+  app accounts only when `APP_ADMIN_PASSWORD` and `APP_MANAGER_PASSWORD` are set
+  in the private environment file. Login and account switching require password
+  entry; passwords are never embedded in the browser bundle. Some API routes permit anonymous
   access. Replace this demo authentication and audit endpoint authorization
   before using private data or making the service publicly accessible.
 - Production requires an explicit `JWT_SECRET_KEY`; development without a key
   generates a process-local key, so tokens expire across process restarts.
 - Do not expose the MCP port (`55008`) outside localhost.
+- For an existing installation with old demo passwords, follow the
+  [credential remediation guide](docs/credential-remediation.md). Updating
+  bootstrap settings alone does not rotate accounts already stored in PostgreSQL.
 
 ## Further documentation
 
