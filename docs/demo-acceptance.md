@@ -12,6 +12,11 @@ python scripts/demo_preflight.py
 
 Lệnh này chỉ gọi các endpoint `GET`. Nó kiểm tra 11 điều kiện: API, PostgreSQL, Superset qua API và trực tiếp, Gemini/MCP, trạng thái bật AI, dataset taxi, biểu đồ, cấu hình nhúng, guest token và trang frontend. Mã thoát `0` nghĩa là đạt hết; mã `1` nghĩa là phải xử lý dòng `[FAIL]`. Token chỉ được kiểm tra sự hiện diện và không được in ra.
 
+Các API dashboard hiện yêu cầu đăng nhập. Trước khi chạy tiền kiểm, đặt
+`APP_PREFLIGHT_TOKEN` bằng token ứng dụng của tài khoản kiểm thử; công cụ
+chỉ gửi token đến các API Superset của ứng dụng, không in token. Xem
+[hướng dẫn phân quyền dashboard](dashboard-rls.md) để kiểm tra theo vai trò.
+
 Nếu dùng cổng hoặc dataset khác:
 
 ```powershell

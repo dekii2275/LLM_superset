@@ -246,6 +246,7 @@ async function executeSemanticAction(
 export async function getSupersetCharts(dashboardId?: number): Promise<SupersetChartItem[]> {
   const query = dashboardId ? `?dashboard_id=${dashboardId}` : "";
   const response = await fetch(apiUrl(`/api/v1/superset/charts${query}`), {
+    headers: authHeaders(),
     cache: "no-store",
   });
   const payload = (await response.json().catch(() => null)) as
@@ -268,7 +269,7 @@ export async function explainSupersetChart(
 ): Promise<SupersetChartExplanationResponse> {
   const response = await fetch(apiUrl(`/api/v1/superset/charts/${chartId}/explain`), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
   });
   const payload = (await response.json().catch(() => null)) as
     | SupersetChartExplanationResponse

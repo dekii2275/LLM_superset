@@ -5,7 +5,8 @@ import {
   embedDashboard,
   type EmbeddedDashboard as SupersetEmbeddedDashboard,
 } from "@superset-ui/embedded-sdk";
-import { apiUrl, getSupersetCharts } from "@/lib/api";
+import { apiUrl, authHeaders, getSupersetCharts } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { Icon } from "@/components/ui/Icon";
 import { ChartExplanationModal } from "./ChartExplanationModal";
 import type { SupersetChartItem } from "@/lib/types";
@@ -38,7 +39,11 @@ type EmbeddedDashboardProps = {
 };
 
 async function getJson<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(apiUrl(path), { cache: "no-store", ...options });
+  const response = await fetch(apiUrl(path), {
+    cache: "no-store",
+    ...options,
+    headers: { ...options?.headers, ...authHeaders() },
+  });
   if (!response.ok) {
     const detail = (await response.json().catch(() => null)) as { detail?: string } | null;
     throw new Error(detail?.detail ?? "Không thể kết nối với Superset.");
@@ -122,12 +127,23 @@ function downloadReport(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function EmbeddedDashboard({
-  onClose,
-  dashboardId,
-  title,
-  variant = "page",
-}: EmbeddedDashboardProps) {
+export function EmbeddedDashboard(props: EmbeddedDashboardProps) {
+  const { user } = useAuth();
+  if (!user) return null;
+  // Discard the iframe, explanations and reports from the previous identity.
+  return (
+    <UserDashboard key={`${user.id}:${user.role}:${JSON.stringify(user.rls_rules)}`} {...props} />
+  );
+}
+
+function UserDashboard({ onClose, dashboardId, title, variant = "page" }: EmbeddedDashboardProps) {
+  const activeRef = useRef(true);
+  useEffect(() => {
+    activeRef.current = true;
+    return () => {
+      activeRef.current = false;
+    };
+  }, []);
   const mountPoint = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const dashboardClient = useRef<SupersetEmbeddedDashboard | null>(null);
@@ -184,11 +200,17 @@ export function EmbeddedDashboard({
         embedded.getActiveTabs(),
         embedded.getDataMask(),
       ]);
+      if (!activeRef.current) return;
       const reportData = await getJson<DashboardReport>("/api/v1/superset/report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ active_tabs: activeTabs, data_mask: dataMask }),
+        body: JSON.stringify({
+          dashboard_id: dashboardId,
+          active_tabs: activeTabs,
+          data_mask: dataMask,
+        }),
       });
+      if (!activeRef.current) return;
       setReport(reportData);
       let reportBlob: Blob;
       if (format === "pdf") {
@@ -213,6 +235,7 @@ export function EmbeddedDashboard({
         reportBlob = await createDocxReport(reportData);
       }
 
+      if (!activeRef.current) return;
       if (fileHandle) {
         const writable = await fileHandle.createWritable();
         await writable.write(reportBlob);
@@ -240,6 +263,7 @@ export function EmbeddedDashboard({
     let cancelled = false;
 
     async function mountDashboard() {
+      setError(null);
       try {
         const resource = dashboardId
           ? `/api/v1/superset/dashboard/${dashboardId}`
@@ -252,6 +276,7 @@ export function EmbeddedDashboard({
           supersetDomain: config.superset_url,
           mountPoint: mountPoint.current,
           fetchGuestToken: async () => {
+            if (cancelled) throw new Error("Phiên dashboard đã đóng.");
             const token = await getJson<{ token: string }>(`${resource}/guest-token`);
             return token.token;
           },

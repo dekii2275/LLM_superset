@@ -8,14 +8,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 
-def get(url: str, timeout: float) -> object:
-    request = Request(url, headers={"Accept": "application/json,text/html"})
+def get(url: str, timeout: float, token: str | None = None) -> object:
+    headers = {"Accept": "application/json,text/html"}
+    if token and "/api/v1/superset/" in url:
+        headers["Authorization"] = f"Bearer {token}"
+    request = Request(url, headers=headers)
     with urlopen(request, timeout=timeout) as response:
         body = response.read(2_000_000)
         if response.status != 200:
@@ -46,7 +50,7 @@ def main() -> int:
         nonlocal total
         total += 1
         try:
-            payload = get(url, args.timeout)
+            payload = get(url, args.timeout, os.environ.get("APP_PREFLIGHT_TOKEN"))
             detail = validate(payload)
             if detail is False:
                 raise ValueError("unexpected or empty response")

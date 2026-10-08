@@ -34,11 +34,18 @@ class SupersetClient:
         *,
         authenticated: bool = True,
         timeout_seconds: float = 15,
+        guest_token: str | None = None,
     ) -> dict[str, Any]:
         headers = {"Accept": "application/json", "Referer": f"{self.base_url}/"}
-        if authenticated and self.access_token:
+        if guest_token:
+            headers["X-GuestToken"] = guest_token
+        elif authenticated and self.access_token:
             headers["Authorization"] = f"Bearer {self.access_token}"
-        if method.upper() in {"POST", "PUT", "PATCH", "DELETE"} and self.csrf_token:
+        if (
+            not guest_token
+            and method.upper() in {"POST", "PUT", "PATCH", "DELETE"}
+            and self.csrf_token
+        ):
             headers["X-CSRFToken"] = self.csrf_token
 
         data = None
@@ -53,7 +60,9 @@ class SupersetClient:
             method=method.upper(),
         )
         try:
-            with self.opener.open(request, timeout=timeout_seconds) as response:
+            # A guest request must never carry the service account's session cookie.
+            opener = build_opener() if guest_token else self.opener
+            with opener.open(request, timeout=timeout_seconds) as response:
                 return json.loads(response.read().decode("utf-8"))
         except HTTPError as error:
             raise SupersetEmbedError(
@@ -222,11 +231,19 @@ class SupersetClient:
         dashboard_slug: str,
         active_tabs: list[str] | None = None,
         data_mask: dict[str, Any] | None = None,
+        guest_token: str | None = None,
     ) -> dict[str, Any]:
         dashboards = self.request("GET", "/api/v1/dashboard/?q=(page:0,page_size:100)").get(
             "result", []
         )
-        dashboard = next((item for item in dashboards if item.get("slug") == dashboard_slug), None)
+        dashboard = next(
+            (
+                item
+                for item in dashboards
+                if item.get("slug") == dashboard_slug or str(item.get("id")) == str(dashboard_slug)
+            ),
+            None,
+        )
         if not dashboard:
             raise SupersetEmbedError("The configured Superset dashboard was not found.")
 
@@ -331,7 +348,16 @@ class SupersetClient:
                 **query_context,
                 "form_data": self._json_object(chart_detail.get("params")),
             }
-            results = self.request("POST", "/api/v1/chart/data", payload).get("result", [])
+            if guest_token:
+                payload["form_data"].update(
+                    {"slice_id": int(chart_id), "dashboardId": dashboard_id}
+                )
+            results = self.request(
+                "POST",
+                "/api/v1/chart/data",
+                payload,
+                **({"guest_token": guest_token} if guest_token else {}),
+            ).get("result", [])
             result = results[0] if results else {}
             rows = result.get("data") or []
             chart_data.append(
@@ -379,6 +405,7 @@ class SupersetClient:
         chart_ids: list[int],
         active_tabs: list[str],
         data_mask: dict[str, Any],
+        guest_token: str | None = None,
     ) -> dict[int, bytes]:
         if not chart_ids:
             return {}
@@ -392,10 +419,15 @@ class SupersetClient:
                 "dataMask": data_mask,
                 "anchor": "",
                 "urlParams": [],
+                **({"guest_token": guest_token} if guest_token else {}),
             },
             timeout_seconds=180,
         )
         result = response.get("result") or response
+        if guest_token and result.get("guest_rls_applied") is not True:
+            raise SupersetEmbedError(
+                "Superset chưa hỗ trợ ảnh báo cáo theo RLS. Hãy cập nhật image Superset."
+            )
         encoded_images = result.get("chart_images")
         if not isinstance(encoded_images, dict):
             raise SupersetEmbedError("Superset did not return chart screenshots.")
@@ -418,14 +450,16 @@ class SupersetClient:
             screenshots[chart_id] = image
         return screenshots
 
-    def create_guest_token(self, dashboard_id: str) -> str:
+    def create_guest_token(
+        self, dashboard_id: str, *, username: str, rls: list[dict[str, Any]]
+    ) -> str:
         result = self.request(
             "POST",
             "/api/v1/security/guest_token/",
             {
-                "user": {"username": "ai-bi-frontend-demo"},
+                "user": {"username": username},
                 "resources": [{"type": "dashboard", "id": dashboard_id}],
-                "rls": [],
+                "rls": rls,
             },
         )
         token = result.get("token")

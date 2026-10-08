@@ -58,13 +58,18 @@ class SupersetDashboardReportTests(unittest.TestCase):
             patch.object(superset_api.settings, "gemini_api_key", "test-key"),
             patch.object(superset_api, "get_client", return_value=client),
             patch.object(superset_api, "GeminiService", FakeGeminiService),
+            patch.object(
+                superset_api.DashboardAccessService, "dashboard", return_value=({"id": 7}, [])
+            ),
         ):
             result = asyncio.run(
                 superset_api.create_dashboard_report(
                     SimpleNamespace(
+                        dashboard_id=7,
                         active_tabs=["TAB-TRIPS-REVENUE"],
                         data_mask={"NATIVE_FILTER-VENDOR": {"filterState": {"value": ["Yellow"]}}},
-                    )
+                    ),
+                    {"role": "admin", "username": "admin"},
                 )
             )
 

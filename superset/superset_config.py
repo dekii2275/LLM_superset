@@ -82,6 +82,7 @@ def _register_dashboard_chart_screenshot_api(_app):
     from flask import g, request
     from flask_appbuilder import permission_name
     from flask_appbuilder.api import expose, protect, safe
+    from superset import security_manager
     from superset.commands.dashboard.permalink.create import CreateDashboardPermalinkCommand
     from superset.dashboards.api import DashboardRestApi, with_dashboard
     from superset.utils.screenshots import DashboardScreenshot
@@ -123,6 +124,23 @@ def _register_dashboard_chart_screenshot_api(_app):
         if any(chart_id not in dashboard_chart_ids for chart_id in chart_ids):
             return self.response_400(message="A chart does not belong to this dashboard.")
 
+        guest_token = payload.get("guest_token")
+        if guest_token is not None:
+            try:
+                if not isinstance(guest_token, str) or not guest_token:
+                    raise ValueError("Invalid guest token")
+                claims = security_manager.parse_jwt_guest_token(guest_token)
+                if claims.get("type") != "guest" or not isinstance(claims.get("rls_rules"), list):
+                    raise ValueError("Invalid guest token claims")
+                allowed_ids = {str(dashboard.id)} | {str(item.uuid) for item in dashboard.embedded}
+                if not any(
+                    resource.get("type") == "dashboard" and str(resource.get("id")) in allowed_ids
+                    for resource in claims.get("resources", [])
+                ):
+                    raise ValueError("Guest token does not grant this dashboard")
+            except Exception:
+                return self.response_400(message="Invalid guest token for chart screenshots.")
+
         dashboard_state = {
             "dataMask": data_mask,
             "activeTabs": active_tabs,
@@ -151,7 +169,18 @@ def _register_dashboard_chart_screenshot_api(_app):
                 context.set_default_timeout(
                     superset_app.config["SCREENSHOT_PLAYWRIGHT_DEFAULT_TIMEOUT"]
                 )
-                machine_auth_provider_factory.instance.authenticate_browser_context(context, g.user)
+                if guest_token:
+                    # No service-account cookie: every page/chart request is evaluated
+                    # by Superset under the caller's signed guest RLS policy.
+                    context.set_extra_http_headers(
+                        {
+                            superset_app.config["GUEST_TOKEN_HEADER_NAME"]: guest_token,
+                        }
+                    )
+                else:
+                    machine_auth_provider_factory.instance.authenticate_browser_context(
+                        context, g.user
+                    )
                 page = context.new_page()
                 page.goto(
                     dashboard_url,
@@ -183,7 +212,13 @@ def _register_dashboard_chart_screenshot_api(_app):
             finally:
                 browser.close()
 
-        return self.response(200, result={"chart_images": chart_images})
+        return self.response(
+            200,
+            result={
+                "chart_images": chart_images,
+                "guest_rls_applied": bool(guest_token),
+            },
+        )
 
     DashboardRestApi.chart_screenshots = chart_screenshots
     DashboardRestApi.include_route_methods = set(DashboardRestApi.include_route_methods) | {

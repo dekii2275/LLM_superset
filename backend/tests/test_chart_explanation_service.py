@@ -188,12 +188,14 @@ class SupersetDashboardChartsTests(unittest.IsolatedAsyncioTestCase):
                 "result": [
                     {
                         "id": 23,
+                        "datasource_id": 2,
                         "slice_name": "Total Trips by Vendor",
                         "viz_type": "pie",
                         "description": "Vendor pie",
                     },
                     {
                         "id": 5,
+                        "datasource_id": 2,
                         "slice_name": "Total No Of Trips",
                         "viz_type": "big_number_total",
                         "description": "KPI",
@@ -203,7 +205,7 @@ class SupersetDashboardChartsTests(unittest.IsolatedAsyncioTestCase):
         }.get(path, {"result": {}})
 
         with patch("app.api.superset.get_client", return_value=mock_client):
-            charts = list_dashboard_charts()
+            charts = list_dashboard_charts({"role": "admin", "username": "admin"})
 
         self.assertEqual(len(charts), 2)
         self.assertEqual(charts[0]["id"], 23)
@@ -236,7 +238,7 @@ class SupersetDashboardChartsTests(unittest.IsolatedAsyncioTestCase):
             patch("app.api.superset.get_client", return_value=mock_client),
             patch("app.api.superset.settings.gemini_api_key", ""),
         ):
-            res = await explain_superset_chart(5)
+            res = await explain_superset_chart(5, {"role": "admin", "username": "admin"})
 
         self.assertEqual(res["chart_id"], 5)
         self.assertEqual(res["viz_type"], "kpi")
@@ -276,7 +278,7 @@ class SupersetDashboardChartsTests(unittest.IsolatedAsyncioTestCase):
             patch("app.api.superset.get_client", return_value=mock_client),
             patch("app.api.superset.settings.gemini_api_key", ""),
         ):
-            res = await explain_superset_chart(23)
+            res = await explain_superset_chart(23, {"role": "admin", "username": "admin"})
 
         self.assertEqual(res["chart_id"], 23)
         self.assertEqual(res["viz_type"], "pie")
@@ -326,7 +328,7 @@ class SupersetDashboardChartsTests(unittest.IsolatedAsyncioTestCase):
             patch("app.api.superset.settings.gemini_api_key", "mock-key"),
             patch("app.api.superset.GeminiService", return_value=mock_gemini),
         ):
-            res = await explain_superset_chart(23)
+            res = await explain_superset_chart(23, {"role": "admin", "username": "admin"})
 
         self.assertEqual(res["chart_id"], 23)
         self.assertIn("Gemini nhận định", res["explanation"]["summary"])

@@ -137,6 +137,7 @@ class DashboardReport(BaseModel):
 
 
 class DashboardReportRequest(BaseModel):
+    dashboard_id: int | None = Field(default=None, gt=0)
     active_tabs: list[str] = Field(default_factory=list, max_length=10)
     data_mask: dict[str, Any] = Field(default_factory=dict)
 

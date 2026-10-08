@@ -3,10 +3,11 @@ import base64
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.api.auth import get_current_user_required
 from app.core.config import settings
 from app.schemas.ai import ChartExplanation, DashboardReportRequest, QueryResult, VisualizationSpec
 from app.services.ai_settings import is_llm_enabled
@@ -15,12 +16,14 @@ from app.services.chart_explanation_service import (
     _as_decimal,
     _format_number,
 )
+from app.services.dashboard_access_service import DashboardAccessService
 from app.services.gemini_service import GeminiService
 from app.services.superset import SupersetClient, SupersetEmbedError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/superset", tags=["superset"])
+CurrentUser = Annotated[dict[str, Any], Depends(get_current_user_required)]
 
 
 def get_client() -> SupersetClient:
@@ -41,10 +44,13 @@ def get_client() -> SupersetClient:
 
 
 @router.get("/embed-config")
-def embed_config() -> dict[str, str]:
+def embed_config(current_user: CurrentUser) -> dict[str, str]:
     client = get_client()
     try:
-        dashboard_id = client.embedded_dashboard_id(settings.superset_dashboard_slug)
+        dashboard, _ = DashboardAccessService(client, current_user).dashboard(
+            settings.superset_dashboard_slug
+        )
+        dashboard_id = client.embedded_dashboard_id(str(dashboard["id"]))
     except SupersetEmbedError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     return {
@@ -54,20 +60,22 @@ def embed_config() -> dict[str, str]:
 
 
 @router.get("/guest-token")
-def guest_token() -> dict[str, str]:
+def guest_token(current_user: CurrentUser) -> dict[str, str]:
     client = get_client()
     try:
-        dashboard_id = client.embedded_dashboard_id(settings.superset_dashboard_slug)
-        token = client.create_guest_token(dashboard_id)
+        token = DashboardAccessService(client, current_user).guest_token(
+            settings.superset_dashboard_slug
+        )
     except SupersetEmbedError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     return {"token": token}
 
 
 @router.get("/dashboard/{dashboard_id}/embed-config")
-def dashboard_embed_config(dashboard_id: int) -> dict[str, str]:
+def dashboard_embed_config(dashboard_id: int, current_user: CurrentUser) -> dict[str, str]:
     client = get_client()
     try:
+        DashboardAccessService(client, current_user).dashboard(dashboard_id)
         embedded_id = client.embedded_dashboard_id(str(dashboard_id))
     except SupersetEmbedError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
@@ -75,38 +83,27 @@ def dashboard_embed_config(dashboard_id: int) -> dict[str, str]:
 
 
 @router.get("/dashboard/{dashboard_id}/guest-token")
-def dashboard_guest_token(dashboard_id: int) -> dict[str, str]:
+def dashboard_guest_token(dashboard_id: int, current_user: CurrentUser) -> dict[str, str]:
     client = get_client()
     try:
-        embedded_id = client.embedded_dashboard_id(str(dashboard_id))
-        token = client.create_guest_token(embedded_id)
+        token = DashboardAccessService(client, current_user).guest_token(dashboard_id)
     except SupersetEmbedError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     return {"token": token}
 
 
 @router.get("/charts")
-def list_dashboard_charts(dashboard_id: int | None = None) -> list[dict[str, Any]]:
+def list_dashboard_charts(
+    current_user: CurrentUser, dashboard_id: int | None = None
+) -> list[dict[str, Any]]:
     client = get_client()
     try:
-        target_id = dashboard_id
-        if not target_id:
-            try:
-                dash_res = client.request(
-                    "GET", f"/api/v1/dashboard/{settings.superset_dashboard_slug}"
-                ).get("result", {})
-                target_id = dash_res.get("id")
-            except Exception:
-                target_id = None
-
-        if target_id:
-            raw_charts = client.request("GET", f"/api/v1/dashboard/{target_id}/charts").get(
-                "result", []
-            )
-        else:
-            raw_charts = client.request("GET", "/api/v1/chart/?q=(page:0,page_size:100)").get(
-                "result", []
-            )
+        dashboard, _ = DashboardAccessService(client, current_user).dashboard(
+            dashboard_id or settings.superset_dashboard_slug
+        )
+        raw_charts = client.request("GET", f"/api/v1/dashboard/{dashboard['id']}/charts").get(
+            "result", []
+        )
 
         charts: list[dict[str, Any]] = []
         seen_ids = set()
@@ -145,6 +142,8 @@ def list_dashboard_charts(dashboard_id: int | None = None) -> list[dict[str, Any
                 }
             )
         return charts
+    except HTTPException:
+        raise
     except SupersetEmbedError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     except Exception as error:
@@ -155,7 +154,7 @@ def list_dashboard_charts(dashboard_id: int | None = None) -> list[dict[str, Any
 
 
 @router.post("/charts/{chart_id}/explain")
-async def explain_superset_chart(chart_id: int) -> dict[str, Any]:
+async def explain_superset_chart(chart_id: int, current_user: CurrentUser) -> dict[str, Any]:
     client = get_client()
     try:
         chart_res = client.request("GET", f"/api/v1/chart/{chart_id}").get("result", {})
@@ -175,7 +174,19 @@ async def explain_superset_chart(chart_id: int) -> dict[str, Any]:
         raw_viz = chart_res.get("viz_type") or form_data.get("viz_type") or ""
 
         # Fetch chart query data
-        data_res = client.request("GET", f"/api/v1/chart/{chart_id}/data/").get("result", [])
+        if current_user.get("role") == "admin":
+            data_res = client.request("GET", f"/api/v1/chart/{chart_id}/data/").get("result", [])
+        else:
+            token = DashboardAccessService(client, current_user).chart_guest_token(chart_res)
+            query_context = client._json_object(chart_res.get("query_context"))
+            if not query_context:
+                raise HTTPException(status_code=422, detail="Biểu đồ chưa có truy vấn đã lưu.")
+            data_res = client.request(
+                "POST",
+                "/api/v1/chart/data",
+                {**query_context, "form_data": {**form_data, "slice_id": chart_id}},
+                guest_token=token,
+            ).get("result", [])
         if not data_res:
             raise HTTPException(status_code=422, detail="Biểu đồ không trả về dữ liệu.")
 
@@ -293,7 +304,9 @@ async def explain_superset_chart(chart_id: int) -> dict[str, Any]:
 
 
 @router.post("/report")
-async def create_dashboard_report(request: DashboardReportRequest) -> dict[str, Any]:
+async def create_dashboard_report(
+    request: DashboardReportRequest, current_user: CurrentUser
+) -> dict[str, Any]:
     if not is_llm_enabled():
         raise HTTPException(
             status_code=503, detail="AI đã tắt trong Settings. Hãy bật lại để tạo báo cáo."
@@ -303,11 +316,16 @@ async def create_dashboard_report(request: DashboardReportRequest) -> dict[str, 
 
     try:
         client = await asyncio.to_thread(get_client)
+        dashboard_ref = str(request.dashboard_id or settings.superset_dashboard_slug)
+        access = DashboardAccessService(client, current_user)
+        _, rules = await asyncio.to_thread(access.dashboard, dashboard_ref)
+        token = await asyncio.to_thread(access.guest_token, dashboard_ref) if rules else None
         dashboard = await asyncio.to_thread(
             client.dashboard_chart_data,
-            settings.superset_dashboard_slug,
+            dashboard_ref,
             request.active_tabs,
             request.data_mask,
+            **({"guest_token": token} if token else {}),
         )
         chart_screenshots = await asyncio.to_thread(
             client.dashboard_chart_screenshots,
@@ -315,7 +333,10 @@ async def create_dashboard_report(request: DashboardReportRequest) -> dict[str, 
             [chart["id"] for chart in dashboard["charts"]],
             dashboard["active_tabs"],
             dashboard["data_mask"],
+            **({"guest_token": token} if token else {}),
         )
+        if rules:
+            dashboard["applied_filters"].extend(rule["clause"] for rule in rules)
         report_charts = [dict(chart) for chart in dashboard["charts"]]
         report = await GeminiService(
             settings.gemini_api_key,

@@ -51,7 +51,7 @@ def get_current_user_optional(authorization: str | None = Header(None)) -> dict[
 def get_current_user_required(authorization: str | None = Header(None)) -> dict[str, Any]:
     """Dependency that enforces a valid Bearer token."""
     user = get_current_user_optional(authorization)
-    if not user:
+    if not user or not user.get("is_active", True):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Thông tin xác thực không hợp lệ hoặc phiên đăng nhập đã hết hạn.",
