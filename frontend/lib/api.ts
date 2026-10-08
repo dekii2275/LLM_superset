@@ -25,7 +25,7 @@ import type {
 
 export function apiUrl(path: string): string {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "");
-  return baseUrl ? `${baseUrl}${path}` : "";
+  return baseUrl ? `${baseUrl}${path}` : path;
 }
 
 export function getAuthToken(): string | null {
