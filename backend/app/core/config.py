@@ -1,7 +1,7 @@
 import secrets
 from pathlib import Path
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LOCAL_ENV_FILE = Path(__file__).resolve().parents[3] / ".env.local"
@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     # Production requires an explicit, persistent key from the environment.
     jwt_secret_key: str = Field(default_factory=lambda: secrets.token_urlsafe(48))
     jwt_algorithm: str = "HS256"
+    app_admin_password: SecretStr | None = None
+    app_manager_password: SecretStr | None = None
 
     model_config = SettingsConfigDict(case_sensitive=False, env_file=LOCAL_ENV_FILE, extra="ignore")
 

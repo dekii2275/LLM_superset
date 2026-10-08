@@ -1,28 +1,27 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 
 export function LoginModal() {
-  const { user, isLoginModalOpen, setIsLoginModalOpen, login, loginAsAdmin, loading } = useAuth();
+  const { user, isLoginModalOpen, setIsLoginModalOpen, login, loginUsername, loading } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isLoginModalOpen) {
+      setUsername(loginUsername);
+      setPassword("");
+      setError(null);
+    }
+  }, [isLoginModalOpen, loginUsername]);
 
   if (!isLoginModalOpen) return null;
 
   const handleBackdropClick = () => {
     if (user) {
       setIsLoginModalOpen(false);
-    }
-  };
-
-  const handleQuickAdmin = async () => {
-    setError(null);
-    try {
-      await loginAsAdmin();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Đăng nhập nhanh thất bại.");
     }
   };
 
@@ -108,22 +107,6 @@ export function LoginModal() {
               {loading ? "Đang xử lý..." : "Đăng nhập"}
             </button>
           </form>
-
-          <div className="login-divider">Hoặc đăng nhập nhanh</div>
-
-          {/* Quick Admin Login Button */}
-          <button
-            type="button"
-            onClick={handleQuickAdmin}
-            disabled={loading}
-            className="login-gate-admin-btn"
-            style={{ marginBottom: 0, justifyContent: "center", textAlign: "center" }}
-            title="Đăng nhập ngay lập tức với tài khoản Admin toàn quyền"
-          >
-            <span style={{ fontSize: "14px", fontWeight: 700 }}>
-              {loading ? "Đang xác thực Admin..." : "Đăng nhập nhanh Admin"}
-            </span>
-          </button>
         </div>
       </div>
     </div>

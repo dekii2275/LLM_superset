@@ -64,6 +64,8 @@ services:
       APP_NAME: ${APP_NAME:-AI BI Assistant API}
       APP_ENV: ${APP_ENV:-development}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env.local or .env.prod}
+      APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD:-}
+      APP_MANAGER_PASSWORD: ${APP_MANAGER_PASSWORD:-}
       REDIS_URL: redis://redis:6379/0
       DATABASE_URL: >-
         postgresql+psycopg://${POSTGRES_USER:?Set POSTGRES_USER in .env.local or .env.prod}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.local or .env.prod}@postgres:5432/${APP_DB_NAME:-ai_bi}
