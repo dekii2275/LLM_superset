@@ -193,8 +193,10 @@ export async function executeCreateDashboard(
   if (!response.ok) {
     throw new ApiError(
       payload && "detail" in payload
-        ? (payload.detail ?? "Không thể tạo bảng điều khiển.")
-        : "Không thể tạo bảng điều khiển.",
+        ? (payload.detail ?? `Không thể tạo bảng điều khiển (HTTP ${response.status}).`)
+        : response.status === 504
+          ? "Quá thời gian chờ tạo bảng điều khiển. Tác vụ có thể vẫn đang chạy; hãy kiểm tra Superset trước khi tạo lại."
+          : `Không thể tạo bảng điều khiển (HTTP ${response.status}).`,
       response.status,
     );
   }

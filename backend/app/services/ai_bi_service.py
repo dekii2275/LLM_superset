@@ -660,7 +660,10 @@ class AIBIService:
         if not sql_plan.sql.strip():
             raise RuntimeError(f"Could not prepare a data query for {chart_plan.title}.")
         response = await self._answer_data_question(
-            chart_plan.question, sql_plan.sql, schema_context=schema_context
+            chart_plan.question,
+            sql_plan.sql,
+            schema_context=schema_context,
+            include_analysis=False,
         )
         query = response.query
         if query is None or query.error:
@@ -931,6 +934,8 @@ class AIBIService:
         sql: str,
         schema_context: str | None = None,
         rls_info: dict[str, Any] | None = None,
+        *,
+        include_analysis: bool = True,
     ) -> AIChatResponse:
         applied_desc = rls_info.get("description") if rls_info else None
         for retry_count in range(2):
@@ -956,6 +961,15 @@ class AIBIService:
                 bool(result.error),
             )
             if not result.error:
+                if not include_analysis:
+                    # Confirmed chart plans already specify their visualization.
+                    # Keep SQL validation/repair, without two extra LLM calls per chart.
+                    return AIChatResponse(
+                        answer="",
+                        query=result,
+                        visualization=self.visualization_service.heuristic(result),
+                        applied_rls_filter=applied_desc,
+                    )
                 try:
                     answer = await self.gemini.generate_answer_from_result(message, result)
                 except Exception:

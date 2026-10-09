@@ -50,7 +50,7 @@ class DashboardScalarKPITests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(spec.type, "kpi")
                 self.assertEqual(spec.y_axis, "trip_count")
 
-    async def test_scalar_kpi_survives_visualization_provider_failure(self):
+    async def test_scalar_kpi_preparation_skips_unnecessary_model_analysis(self):
         result = QueryResult(
             sql="SELECT SUM(total_amount) AS revenue FROM raw.yellow_taxi_trips",
             columns=["revenue"],
@@ -65,6 +65,31 @@ class DashboardScalarKPITests(unittest.IsolatedAsyncioTestCase):
             )
         )
         self.assertEqual(spec.y_axis, "revenue")
+        service.gemini.generate_answer_from_result.assert_not_awaited()
+        service.gemini.generate_visualization.assert_not_awaited()
+
+    async def test_sql_repair_is_preserved_without_model_analysis(self):
+        failed = QueryResult(sql="SELECT bad_column", error="column does not exist")
+        repaired = QueryResult(
+            sql="SELECT COUNT(*) AS trip_count FROM raw.yellow_taxi_trips",
+            columns=["trip_count"],
+            rows=[{"trip_count": 30000}],
+            row_count=1,
+        )
+        service = self.service([failed, repaired])
+        service.gemini.repair_sql = AsyncMock(
+            return_value=SQLGenerationResult(intent="data_query", sql=repaired.sql)
+        )
+        _, spec = await service.prepare_chart_preview(
+            ChartPlan(title="Trips", chart_type="kpi", question="Count trips", metric="COUNT(*)")
+        )
+        self.assertEqual(spec.y_axis, "trip_count")
+        service.gemini.repair_sql.assert_awaited_once()
+        service.gemini.generate_answer_from_result.assert_not_awaited()
+        service.gemini.generate_visualization.assert_not_awaited()
+        self.assertEqual(
+            service.query_service.execute_query.await_args_list[1].args[0], repaired.sql
+        )
 
     async def test_invalid_or_ambiguous_scalar_still_rejected(self):
         for columns, rows in (
@@ -161,10 +186,14 @@ class DashboardScalarKPITests(unittest.IsolatedAsyncioTestCase):
             results.append(
                 QueryResult(sql="SELECT 1", columns=columns, rows=rows, row_count=len(rows))
             )
-        prepared = await self.service(results).prepare_dashboard_charts(
+        service = self.service(results)
+        prepared = await service.prepare_dashboard_charts(
             DashboardPlan(title="Demo", dataset_id=1, charts=charts)
         )
         self.assertEqual(len(prepared), 5)
+        self.assertEqual(service.gemini.generate_sql.await_count, 5)
+        service.gemini.generate_answer_from_result.assert_not_awaited()
+        service.gemini.generate_visualization.assert_not_awaited()
         writer = SupersetWriteService("http://superset", "http://public", "u", "p", 1)
         expected = [
             "big_number_total",
