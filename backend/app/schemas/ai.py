@@ -92,6 +92,13 @@ class SQLGenerationResult(BaseModel):
     answer_type: str = "table"
 
 
+class ChartSQLGenerationResult(SQLGenerationResult):
+    """A confirmed chart always requires a nonempty read-only data query."""
+
+    intent: Literal["data_query"] = "data_query"
+    sql: str = Field(min_length=1)
+
+
 class QueryResult(BaseModel):
     sql: str | None = None
     columns: list[str] = Field(default_factory=list)

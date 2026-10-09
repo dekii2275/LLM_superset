@@ -88,9 +88,12 @@ class ChartPreviewDatasetTests(unittest.IsolatedAsyncioTestCase):
         response = await service.chat("Add a heatmap to this dashboard", dataset_id=5)
 
         self.assertEqual(gemini.plan_schema, SCHEMA)
-        self.assertEqual(
-            gemini.sql_calls, [("Count cities by country and is_megacity", SCHEMA, True)]
-        )
+        self.assertEqual(len(gemini.sql_calls), 1)
+        question, schema, forced = gemini.sql_calls[0]
+        self.assertIn("Count cities by country and is_megacity", question)
+        self.assertIn("heatmap", question)
+        self.assertEqual(schema, SCHEMA)
+        self.assertTrue(forced)
         self.assertEqual(
             response.pending_action.edit_dashboard_plan.create_chart_plan.dataset_id, 5
         )

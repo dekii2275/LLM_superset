@@ -13,6 +13,7 @@ from google.genai import types
 from app.schemas.ai import (
     ChartExplanation,
     ChartPlan,
+    ChartSQLGenerationResult,
     DashboardPlan,
     DashboardReport,
     EditChartPlan,
@@ -125,7 +126,7 @@ Rules:
 {history_context}
 User question:
 {question}"""
-        return await self._structured_plan(prompt)
+        return await self._structured_plan(prompt, require_sql=force_data_query)
 
     async def classify_intent(self, message: str) -> IntentResult:
         prompt = f"""You are an intent router for an AI Business Intelligence assistant.
@@ -413,22 +414,25 @@ Row count: {result.row_count}
             return VisualizationSpec.model_validate(parsed)
         return VisualizationSpec.model_validate_json(response.text or "")
 
-    async def _structured_plan(self, prompt: str) -> SQLGenerationResult:
+    async def _structured_plan(
+        self, prompt: str, *, require_sql: bool = False
+    ) -> SQLGenerationResult:
+        schema = ChartSQLGenerationResult if require_sql else SQLGenerationResult
         response = await self._generate_content(
             model=self.model,
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0,
                 response_mime_type="application/json",
-                response_schema=SQLGenerationResult,
+                response_schema=schema,
             ),
         )
         parsed = getattr(response, "parsed", None)
         if isinstance(parsed, SQLGenerationResult):
-            return parsed
+            return schema.model_validate(parsed.model_dump())
         if isinstance(parsed, dict):
-            return SQLGenerationResult.model_validate(parsed)
-        return SQLGenerationResult.model_validate_json(response.text or "")
+            return schema.model_validate(parsed)
+        return schema.model_validate_json(response.text or "")
 
     async def _edit_plan(self, prompt: str, schema: type[Any]) -> Any:
         response = await self._generate_content(

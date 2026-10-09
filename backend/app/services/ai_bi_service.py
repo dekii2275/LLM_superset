@@ -10,6 +10,7 @@ import uuid
 from typing import Any
 
 from google.genai import types
+from pydantic import ValidationError
 
 from app.schemas.ai import (
     AIActionPlan,
@@ -679,12 +680,13 @@ class AIBIService:
         """Chart plans already imply a data query; retry one empty model result."""
         for attempt in range(2):
             question = (
-                chart_plan.question
-                if attempt == 0
-                else (
-                    f"Return database rows for the {chart_plan.chart_type} chart '{chart_plan.title}'. "
-                    f"{chart_plan.question}"
-                )
+                f"Return database rows for the confirmed {chart_plan.chart_type} chart "
+                f"'{chart_plan.title}'. Analytics question: {chart_plan.question}\n"
+                f"Requested metric: {chart_plan.metric or 'infer from the analytics question'}. "
+                f"Primary dimension: {chart_plan.dimension or 'none'}. "
+                f"Secondary dimension: {chart_plan.secondary_dimension or 'none'}.\n"
+                "Use real columns from the supplied schema and return a nonempty SELECT query. "
+                "Aggregate timestamps to the time grain requested in the question."
             )
             try:
                 plan = await self.gemini.generate_sql(
@@ -695,6 +697,13 @@ class AIBIService:
                     plan = await self.gemini.generate_sql(question, schema_context=schema_context)
                 except TypeError:
                     plan = await self.gemini.generate_sql(question)
+            except ValidationError:
+                logger.warning(
+                    "chart_sql_invalid_response chart=%r attempt=%s", chart_plan.title, attempt + 1
+                )
+                if attempt == 0:
+                    continue
+                raise
             if plan.sql.strip():
                 if plan.intent.casefold() != "data_query":
                     logger.warning(
