@@ -11,6 +11,7 @@ import { Icon } from "@/components/ui/Icon";
 import { ChartExplanationModal } from "./ChartExplanationModal";
 import type { SupersetChartItem } from "@/lib/types";
 import type { DashboardReport } from "@/lib/docxReport";
+import { createDashboardReportRequest, supersetErrorMessage } from "@/lib/supersetReportRequest";
 
 type EmbedConfig = {
   dashboard_id: string;
@@ -45,8 +46,8 @@ async function getJson<T>(path: string, options?: RequestInit): Promise<T> {
     headers: { ...options?.headers, ...authHeaders() },
   });
   if (!response.ok) {
-    const detail = (await response.json().catch(() => null)) as { detail?: string } | null;
-    throw new Error(detail?.detail ?? "Không thể kết nối với Superset.");
+    const payload: unknown = await response.json().catch(() => null);
+    throw new Error(supersetErrorMessage(payload, response.status));
   }
   return response.json() as Promise<T>;
 }
@@ -204,11 +205,7 @@ function UserDashboard({ onClose, dashboardId, title, variant = "page" }: Embedd
       const reportData = await getJson<DashboardReport>("/api/v1/superset/report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dashboard_id: dashboardId,
-          active_tabs: activeTabs,
-          data_mask: dataMask,
-        }),
+        body: JSON.stringify(createDashboardReportRequest(dashboardId, activeTabs, dataMask)),
       });
       if (!activeRef.current) return;
       setReport(reportData);

@@ -1,10 +1,34 @@
 import json
 import unittest
+from unittest.mock import MagicMock
 
 from app.services.superset import SupersetClient
 
 
 class SupersetReportContextTests(unittest.TestCase):
+    def test_default_tab_skips_empty_containers_and_follows_container_order(self):
+        client = SupersetClient("http://superset", "user", "password")
+        positions = {
+            "TAB-UNUSED": {"type": "TAB", "children": [], "meta": {"text": "Unused"}},
+            "EMPTY-TABS": {"type": "TABS", "children": []},
+            "TABS_ID": {"type": "TABS", "children": ["TAB-TRIPS"]},
+            "TAB-TRIPS": {"type": "TAB", "children": ["CHART-21"], "meta": {"text": "Trips"}},
+            "CHART-21": {"type": "CHART", "meta": {"chartId": 21}},
+        }
+        client.request = MagicMock(
+            side_effect=[
+                {"result": [{"id": 7, "slug": "taxi", "dashboard_title": "Taxi"}]},
+                {"result": {"position_json": json.dumps(positions), "json_metadata": "{}"}},
+                {"result": [{"id": 21, "slice_name": "Trips", "viz_type": "big_number"}]},
+                {"result": {"query_context": json.dumps({"queries": []}), "params": "{}"}},
+                {"result": [{"status": "success", "data": [{"trips": 30000}]}]},
+            ]
+        )
+        report = client.dashboard_chart_data("taxi", [], {})
+        self.assertEqual(report["active_tabs"], ["TAB-TRIPS"])
+        self.assertEqual(report["active_tab_title"], "Trips")
+        self.assertEqual([chart["id"] for chart in report["charts"]], [21])
+
     def test_empty_active_tab_keeps_dashboard_level_charts_visible_below_tabs(self):
         client = SupersetClient("http://superset", "user", "password")
         positions = {

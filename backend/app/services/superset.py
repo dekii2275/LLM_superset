@@ -262,15 +262,13 @@ class SupersetClient:
         if tabs and active_tabs and not selected_tabs:
             raise SupersetEmbedError("The active dashboard tab could not be matched.")
         if tabs and not selected_tabs:
-            tabs_container = next(
-                (
-                    item
-                    for item in position_json.values()
-                    if isinstance(item, dict) and item.get("type") == "TABS"
-                ),
-                None,
-            )
-            defaults = (tabs_container or {}).get("children") or []
+            # Empty tab containers must not override the first actual dashboard tab.
+            defaults = [
+                child
+                for item in position_json.values()
+                if isinstance(item, dict) and item.get("type") == "TABS"
+                for child in (item.get("children") or [])
+            ]
             first_tab = next((str(item_id) for item_id in defaults if str(item_id) in tabs), None)
             selected_tabs = [first_tab or next(iter(tabs))]
         selected_tab = tabs.get(selected_tabs[-1]) if selected_tabs else None
