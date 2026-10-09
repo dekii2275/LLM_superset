@@ -52,71 +52,6 @@ async function getJson<T>(path: string, options?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-async function createPdf(element: HTMLElement): Promise<Blob> {
-  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-    import("html2canvas"),
-    import("jspdf"),
-  ]);
-  const canvas = await html2canvas(element, {
-    backgroundColor: "#fff",
-    scale: 2,
-    useCORS: true,
-    onclone: (documentClone) => {
-      const reportClone = documentClone.querySelector<HTMLElement>(".dashboard-report");
-      if (reportClone) {
-        Object.assign(reportClone.style, {
-          position: "fixed",
-          top: "0",
-          left: "0",
-          width: "794px",
-          maxWidth: "none",
-          margin: "0",
-          visibility: "visible",
-          opacity: "1",
-        });
-      }
-    },
-  });
-  const pdf = new jsPDF({ unit: "pt", format: "a4", compress: true });
-  const margin = 36;
-  const contentWidth = pdf.internal.pageSize.getWidth() - margin * 2;
-  const contentHeight = pdf.internal.pageSize.getHeight() - margin * 2;
-  const sourcePageHeight = Math.floor((canvas.width * contentHeight) / contentWidth);
-
-  for (let top = 0; top < canvas.height; top += sourcePageHeight) {
-    if (top > 0) pdf.addPage();
-    const slice = document.createElement("canvas");
-    slice.width = canvas.width;
-    slice.height = Math.min(sourcePageHeight, canvas.height - top);
-    slice
-      .getContext("2d")
-      ?.drawImage(canvas, 0, top, canvas.width, slice.height, 0, 0, canvas.width, slice.height);
-    pdf.addImage(
-      slice.toDataURL("image/jpeg", 0.94),
-      "JPEG",
-      margin,
-      margin,
-      contentWidth,
-      (slice.height * contentWidth) / canvas.width,
-    );
-  }
-
-  return pdf.output("blob");
-}
-
-async function waitForReportCharts(element: HTMLElement): Promise<void> {
-  const images = Array.from(element.querySelectorAll<HTMLImageElement>(".dashboard-report-image"));
-  await Promise.all(
-    images.map(async (image) => {
-      try {
-        await image.decode();
-      } catch {
-        throw new Error(`Không thể tải biểu đồ “${image.alt}” để xuất PDF.`);
-      }
-    }),
-  );
-}
-
 function downloadReport(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -148,16 +83,13 @@ function UserDashboard({ onClose, dashboardId, title, variant = "page" }: Embedd
   const mountPoint = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const dashboardClient = useRef<SupersetEmbeddedDashboard | null>(null);
-  const reportElement = useRef<HTMLElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const [report, setReport] = useState<DashboardReport | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportStatus, setReportStatus] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportFormat, setReportFormat] = useState<"pdf" | "docx">("pdf");
 
   async function createReport(format: "pdf" | "docx") {
-    setReport(null);
     setReportError(null);
     setReportFormat(format);
     const fileType =
@@ -208,25 +140,10 @@ function UserDashboard({ onClose, dashboardId, title, variant = "page" }: Embedd
         body: JSON.stringify(createDashboardReportRequest(dashboardId, activeTabs, dataMask)),
       });
       if (!activeRef.current) return;
-      setReport(reportData);
       let reportBlob: Blob;
       if (format === "pdf") {
-        await new Promise<void>((resolve) =>
-          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-        );
-        if (!reportElement.current) throw new Error("Không tìm thấy nội dung báo cáo để xuất PDF.");
-        const reportNode = reportElement.current;
-        reportNode.style.left = "0px";
-        reportNode.style.visibility = "visible";
-        reportNode.style.opacity = "0";
-        try {
-          await waitForReportCharts(reportNode);
-          reportBlob = await createPdf(reportNode);
-        } finally {
-          reportNode.style.left = "";
-          reportNode.style.visibility = "";
-          reportNode.style.opacity = "";
-        }
+        const { createPdfReport } = await import("@/lib/pdfReport");
+        reportBlob = await createPdfReport(reportData);
       } else {
         const { createDocxReport } = await import("@/lib/docxReport");
         reportBlob = await createDocxReport(reportData);
@@ -515,59 +432,6 @@ function UserDashboard({ onClose, dashboardId, title, variant = "page" }: Embedd
           <p className="superset-embed-error">{error}</p>
         ) : (
           <div ref={mountPoint} className="superset-embed-frame" />
-        )}
-
-        {report && (
-          <article ref={reportElement} className="dashboard-report" aria-label="Báo cáo dashboard">
-            <h1>{report.dashboard_title}</h1>
-            <h2>Báo cáo phân tích dashboard</h2>
-            <p className="dashboard-report-meta">
-              Tạo lúc {new Date(report.generated_at).toLocaleString("vi-VN")}
-            </p>
-            <p className="dashboard-report-note">
-              Tab: {report.active_tab_title || "Dashboard"}
-              <br />
-              {report.applied_filters.length > 0
-                ? `Bộ lọc đang chọn: ${report.applied_filters.join("; ")}`
-                : "Không có bộ lọc đang chọn."}
-            </p>
-            <section className="dashboard-report-overview">
-              <h3>Tổng quan</h3>
-              <p>{report.analysis.overview}</p>
-              {report.analysis.highlights.length > 0 && (
-                <ul>
-                  {report.analysis.highlights.map((highlight, index) => (
-                    <li key={index}>{highlight}</li>
-                  ))}
-                </ul>
-              )}
-            </section>
-            {report.charts.map((chart) => {
-              const insight = report.analysis.chart_insights.find(
-                (item) => item.chart_id === chart.id,
-              );
-              return (
-                <section className="dashboard-report-chart-section" key={chart.id}>
-                  <h3>{chart.title}</h3>
-                  <p>{insight?.insight ?? "Chưa có nhận xét riêng cho biểu đồ này."}</p>
-                  {chart.screenshot_base64 && (
-                    <img
-                      className="dashboard-report-image"
-                      src={`data:image/png;base64,${chart.screenshot_base64}`}
-                      alt={`Biểu đồ: ${chart.title}`}
-                    />
-                  )}
-                  {chart.unavailable && <p>Không lấy được dữ liệu biểu đồ.</p>}
-                  {chart.truncated && (
-                    <p className="dashboard-report-chart-note">
-                      Biểu đồ hiển thị {chart.rows.length} dòng mẫu trên tổng số {chart.row_count}{" "}
-                      dòng.
-                    </p>
-                  )}
-                </section>
-              );
-            })}
-          </article>
         )}
       </section>
 
