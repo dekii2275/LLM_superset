@@ -803,6 +803,34 @@ class AIBIService:
     def _chart_visualization(
         self, chart_plan: ChartPlan, query: QueryResult, existing: VisualizationSpec | None
     ) -> VisualizationSpec:
+        if chart_plan.chart_type == "kpi":
+            # A scalar aggregate is a valid KPI even if Gemini returns no chart
+            # or names the metric as COUNT(*) rather than its SQL result alias.
+            if query.row_count != 1 or len(query.rows) != 1:
+                return VisualizationSpec()
+            numeric_columns = [
+                column
+                for column in query.columns
+                if self.visualization_service._is_numeric_column(query, column)
+            ]
+            y_axis = (
+                chart_plan.metric
+                if chart_plan.metric in numeric_columns
+                else existing.y_axis
+                if existing and existing.type == "kpi" and existing.y_axis in numeric_columns
+                else numeric_columns[0]
+                if len(numeric_columns) == 1
+                else None
+            )
+            return self.visualization_service.validate(
+                VisualizationSpec(
+                    type="kpi",
+                    title=chart_plan.title,
+                    y_axis=y_axis,
+                    y_label=(y_axis or "").replace("_", " ").title() or None,
+                ),
+                query,
+            )
         if chart_plan.chart_type == "heatmap":
             numeric_columns = [
                 column
